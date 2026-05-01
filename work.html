@@ -1,0 +1,929 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Work — Enora Minot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Syne', sans-serif; cursor: none; overflow: hidden; height: 100dvh; background: var(--bg); transition: background .4s; }
+
+    :root {
+      --bg:     #0c0b10;
+      --fg:     #ffffff;
+      --fg-dim: rgba(255,255,255,.55);
+      --fg-mute:rgba(255,255,255,.25);
+      --accent: #a8ff78;
+      --border: rgba(255,255,255,.14);
+      --border-hover: rgba(255,255,255,.38);
+    }
+    [data-theme="light"] {
+      --bg:     #f0ede8;
+      --fg:     #0f0e0d;
+      --fg-dim: rgba(15,14,13,.55);
+      --fg-mute:rgba(15,14,13,.30);
+      --border: rgba(0,0,0,.13);
+      --border-hover: rgba(0,0,0,.32);
+    }
+
+    /* ── Cursor ──────────────────────────────────────── */
+    #cursor-dot, #cursor-ring {
+      position: fixed; top: 0; left: 0; pointer-events: none;
+      z-index: 9999; transform: translate(-50%,-50%); border-radius: 50%;
+    }
+    #cursor-dot { width: 6px; height: 6px; background: var(--fg); box-shadow: 0 0 6px rgba(255,255,255,.6); }
+    #cursor-ring { width: 34px; height: 34px; border: 1.5px solid var(--border-hover); transition: width .22s, height .22s; }
+    #cursor-ring.hovering { width: 50px; height: 50px; animation: halo 1.2s linear infinite; }
+    #cursor-ring.drag { width: 60px; height: 60px; border-width: 2px; animation: none; }
+    @keyframes halo {
+      0%,100% { border-color: hsl(0,100%,65%);   box-shadow: 0 0 14px 3px hsl(0,100%,65%); }
+      25%      { border-color: hsl(90,100%,55%);  box-shadow: 0 0 14px 3px hsl(90,100%,55%); }
+      50%      { border-color: hsl(200,100%,60%); box-shadow: 0 0 14px 3px hsl(200,100%,60%); }
+      75%      { border-color: hsl(270,100%,70%); box-shadow: 0 0 14px 3px hsl(270,100%,70%); }
+    }
+
+    /* ── Top bar ─────────────────────────────────────── */
+    #top-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 28px 40px; }
+    .top-left { display: flex; }
+    .brand { font-family: 'DM Mono', monospace; font-size: .88rem; color: var(--fg); text-decoration: none; }
+    .brand span { color: var(--accent); }
+    .top-nav { display: flex; gap: 26px; list-style: none; justify-content: center; }
+    .top-nav a { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--fg-dim); text-decoration: none; transition: color .2s; }
+    .top-nav a:hover, .top-nav a.active { color: var(--fg); }
+    .top-nav a.active { font-weight: 600; position: relative; }
+    .top-nav a.active::after { content: ''; position: absolute; bottom: -5px; left: 0; right: 0; height: 1.5px; background: var(--fg); border-radius: 2px; }
+    .top-right { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+    .ctrl-btn { width: 30px; height: 30px; background: transparent; border: none; cursor: none; display: flex; align-items: center; justify-content: center; color: var(--fg-dim); border-radius: 6px; transition: color .2s, background .2s; }
+    .ctrl-btn:hover, .ctrl-btn.active { color: var(--fg); background: rgba(128,128,128,.15); }
+    .ctrl-sep { width: 1px; height: 16px; background: var(--fg-mute); margin: 0 6px; }
+
+    /* ── Horizontal strip ────────────────────────────── */
+    .h-viewport { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; overflow: hidden; user-select: none; }
+    .h-track {
+      display: flex; align-items: center; gap: 2vw; padding: 0 10vw;
+      will-change: transform;
+    }
+
+    /* ── Card ────────────────────────────────────────── */
+    .h-item {
+      flex: 0 0 30vw; height: 74vh;
+      position: relative;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg);
+      overflow: hidden; cursor: none;
+      transition: border-color .4s, transform .6s cubic-bezier(.22,1,.36,1), box-shadow .4s;
+    }
+    .h-item:hover {
+      border-color: var(--border-hover);
+      transform: scale(1.022);
+      box-shadow: 0 20px 50px rgba(0,0,0,.3);
+    }
+
+    /* Image — full bleed */
+    .item-ph {
+      position: absolute; inset: 0; z-index: 0;
+      overflow: hidden; pointer-events: none;
+    }
+    .item-ph img {
+      width: 100%; height: 100%; object-fit: cover; object-position: center 20%;
+      display: block;
+      filter: grayscale(100%) brightness(.6) contrast(1.1);
+      transform: scale(1.06);
+      transition: transform .7s cubic-bezier(.22,1,.36,1), filter .55s ease;
+    }
+    .h-item:hover .item-ph img {
+      transform: scale(1.0);
+      filter: grayscale(0%) brightness(1) saturate(1.05);
+    }
+    .item-ph-icon { display: none; }
+    .item-ph-text { display: none; }
+
+    /* Text zone — always frosted blur */
+    .item-body {
+      position: absolute; bottom: 0; left: 0; right: 0; z-index: 2;
+      padding: 20px 22px 26px;
+      backdrop-filter: blur(14px) brightness(.65);
+      -webkit-backdrop-filter: blur(14px) brightness(.65);
+      background: linear-gradient(to top, rgba(0,0,0,.5) 0%, transparent 100%);
+    }
+
+    /* Index number */
+    .item-num {
+      position: absolute; right: 14px; top: 14px; z-index: 3;
+      font-family: 'DM Mono', monospace; font-size: .62rem;
+      letter-spacing: .10em; color: #000;
+      pointer-events: none;
+    }
+
+    /* Tag */
+    .item-tag-corner {
+      display: block; margin-bottom: 10px;
+      font-family: 'DM Mono', monospace; font-size: .58rem;
+      letter-spacing: .12em; text-transform: uppercase;
+      color: rgba(255,255,255,.5);
+    }
+
+    .item-title {
+      font-size: clamp(1.05rem, 1.6vw, 1.45rem); font-weight: 800;
+      color: #fff; line-height: 1.1; letter-spacing: -.02em; margin: 0 0 14px;
+    }
+    .item-title em { font-style: italic; color: rgba(255,255,255,.6); }
+
+    .item-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: .72rem; font-weight: 600; color: rgba(255,255,255,.6);
+      text-decoration: none; letter-spacing: .04em;
+      opacity: 0; transform: translateY(4px);
+      transition: opacity .28s .05s, transform .28s .05s, color .2s;
+    }
+    .h-item:hover .item-link { opacity: 1; transform: translateY(0); }
+    .item-link:hover { color: #fff !important; }
+
+    /* Drag blur — applied via JS class */
+    .h-track.is-dragging .h-item {
+      filter: blur(var(--drag-blur, 0px)) brightness(var(--drag-dim, 1));
+      transition: filter .08s linear, transform .55s cubic-bezier(.22,1,.36,1), border-color .35s, box-shadow .35s;
+    }
+    .h-track.drag-released .h-item {
+      filter: blur(0px) brightness(1);
+      transition: filter .5s cubic-bezier(.22,1,.36,1), transform .55s cubic-bezier(.22,1,.36,1), border-color .35s, box-shadow .35s;
+    }
+
+    /* ── Page hint ───────────────────────────────────── */
+    .page-hint {
+      position: fixed; bottom: 60px; right: 40px; z-index: 20;
+      font-family: 'DM Mono', monospace; font-size: .64rem; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--fg); font-weight: 700;
+      transition: opacity .5s;
+    }
+    .page-hint.hidden { opacity: 0; pointer-events: none; }
+
+    /* Progress line */
+    .h-progress { position: fixed; bottom: 0; left: 0; right: 0; height: 1px; background: var(--border); z-index: 20; }
+    .h-progress-fill { height: 100%; background: var(--fg); width: 20%; transition: width .1s linear; }
+
+    /* ── Mobile nav overlay ──────────────────────────── */
+    .mob-btn { display: none; }
+    .mob-nav {
+      display: none; position: fixed; inset: 0; z-index: 300;
+      background: var(--bg); flex-direction: column;
+      align-items: center; justify-content: center; gap: 0;
+    }
+    .mob-nav.open { display: flex; }
+    .mob-nav-links { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .mob-nav-links a {
+      font-size: clamp(2rem, 9vw, 2.8rem); font-weight: 800; color: var(--fg);
+      text-decoration: none; letter-spacing: -.03em; padding: 8px 0; transition: color .2s;
+    }
+    .mob-nav-close {
+      position: absolute; top: 18px; right: 18px; background: transparent;
+      border: none; color: var(--fg); width: 40px; height: 40px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 8px;
+    }
+    .mob-theme {
+      display: flex; gap: 4px; margin: 0 0 36px;
+      border: 1px solid var(--border); border-radius: 40px; padding: 4px;
+    }
+    .mob-theme .ctrl-btn { cursor: pointer; border-radius: 40px; padding: 8px 18px; width: auto; height: auto; color: var(--fg-mute); }
+    .mob-theme .ctrl-btn.active { background: var(--fg); color: var(--bg); }
+
+    /* ── Responsive ──────────────────────────────────── */
+    @media (max-width: 680px) {
+      #top-bar { padding: 18px 20px; }
+      .top-nav { display: none; }
+      .top-right .theme-btn, .ctrl-sep { display: none; }
+      .mob-btn { display: flex !important; }
+      .h-item { flex: 0 0 80vw; height: 68vh; }
+      .h-track { padding: 0 5vw; gap: 4vw; }
+      .h-item::after { font-size: 110vw; }
+      .item-ph img { filter: grayscale(0%) brightness(.9) contrast(1); transform: scale(1); }
+      .item-link { opacity: 1; transform: translateX(0); }
+      .item-title { font-size: clamp(1rem, 4vw, 1.2rem); }
+      .page-hint { right: 20px; bottom: 60px; font-size: .58rem; }
+    }
+    @media (hover: none) and (pointer: coarse) {
+      #cursor-dot, #cursor-ring { display: none !important; }
+      body { cursor: auto; }
+      a, button { cursor: pointer; }
+      .h-item { cursor: pointer; }
+    }
+
+    /* ── Site footer ─────────────────────────────────── */
+    .site-footer {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 25;
+      height: 44px; padding: 0 40px;
+      display: flex; align-items: center; justify-content: space-between;
+      background: var(--bg); border-top: 1px solid var(--border);
+      font-family: 'DM Mono', monospace; font-size: .66rem;
+      color: var(--fg-mute); letter-spacing: .06em;
+      transition: background .4s, border-color .4s;
+    }
+    .site-footer a { color: inherit; text-decoration: none; transition: color .2s; }
+    .site-footer a:hover { color: var(--fg); }
+    .site-footer nav { display: flex; gap: 20px; }
+    @media (max-width: 600px) {
+      .site-footer { padding: 0 20px; }
+      .site-footer nav { gap: 14px; font-size: .6rem; }
+    }
+
+    /* ── Case study overlay ──────────────────────────── */
+    #cs-overlay {
+      display: none;
+      position: fixed; z-index: 500;
+      background: var(--bg);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    #cs-overlay.ready {
+      overflow-y: auto;
+      scroll-behavior: smooth;
+      overscroll-behavior: contain;
+    }
+    #cs-overlay::-webkit-scrollbar { width: 4px; }
+    #cs-overlay::-webkit-scrollbar-track { background: transparent; }
+    #cs-overlay::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 2px; }
+
+    #cs-close {
+      position: fixed; top: 28px; right: 40px; z-index: 501;
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(128,128,128,.15); border: 1px solid var(--border);
+      color: var(--fg); font-size: 1.1rem; cursor: none;
+      display: none; align-items: center; justify-content: center;
+      transition: background .2s;
+    }
+    #cs-close:hover { background: rgba(128,128,128,.30); }
+    #cs-close.visible { display: flex; }
+
+    .cs-inner { padding: 100px 10vw 80px; max-width: 980px; margin: 0 auto; }
+    .cs-label {
+      font-family: 'DM Mono', monospace; font-size: .72rem; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--fg-mute); margin-bottom: 24px; display: block;
+    }
+    .cs-title {
+      font-size: clamp(2.4rem, 5.5vw, 5rem); font-weight: 800; color: var(--fg);
+      line-height: 1.0; letter-spacing: -.04em; margin-bottom: 12px;
+    }
+    .cs-title em { font-style: normal; color: transparent; -webkit-text-stroke: 2px var(--fg); }
+    .cs-company {
+      font-family: 'DM Mono', monospace; font-size: .78rem; letter-spacing: .10em;
+      text-transform: uppercase; color: var(--fg-dim); margin-bottom: 44px;
+    }
+    .cs-image {
+      width: 100%; aspect-ratio: 16/8;
+      background: var(--border); border-radius: 4px; margin-bottom: 64px;
+      display: flex; align-items: center; justify-content: center;
+      overflow: hidden;
+    }
+    .cs-image img { width: 100%; height: 100%; object-fit: cover; object-position: center 20%; display: block; }
+    .cs-image-label {
+      font-family: 'DM Mono', monospace; font-size: .62rem; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--fg-mute);
+    }
+    .cs-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 40px; margin-bottom: 64px; }
+    .cs-col-label {
+      font-family: 'DM Mono', monospace; font-size: .64rem; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--fg-mute); margin-bottom: 12px; display: block;
+    }
+    .cs-col-text { font-size: .95rem; color: var(--fg-dim); line-height: 1.75; }
+    .cs-meta {
+      display: flex; gap: 32px; flex-wrap: wrap; margin-bottom: 52px;
+    }
+    .cs-meta-item { display: flex; flex-direction: column; gap: 4px; }
+    .cs-meta-label {
+      font-family: 'DM Mono', monospace; font-size: .60rem; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--fg-mute);
+    }
+    .cs-meta-value { font-size: .88rem; color: var(--fg-dim); }
+    .cs-intro { font-size: 1.15rem; color: var(--fg-dim); line-height: 1.8; margin-bottom: 52px; max-width: 680px; }
+    .cs-highlights {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+      margin-bottom: 64px;
+    }
+    .cs-hl-card {
+      background: var(--border); border-radius: 3px; padding: 24px 20px;
+    }
+    .cs-hl-stat {
+      font-size: clamp(1.6rem, 3vw, 2.4rem); font-weight: 800; color: var(--fg);
+      letter-spacing: -.04em; line-height: 1; margin-bottom: 8px; display: block;
+    }
+    .cs-hl-label { font-size: .78rem; color: var(--fg-dim); line-height: 1.5; }
+    .cs-process { margin-bottom: 64px; }
+    .cs-process-title {
+      font-family: 'DM Mono', monospace; font-size: .64rem; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--fg-mute); margin-bottom: 24px; display: block;
+    }
+    .cs-process-steps { display: flex; flex-direction: column; gap: 0; }
+    .cs-step {
+      display: grid; grid-template-columns: 48px 1fr; align-items: baseline;
+      padding: 16px 0; border-top: 1px solid var(--border);
+    }
+    .cs-step:last-child { border-bottom: 1px solid var(--border); }
+    .cs-step-num {
+      font-family: 'DM Mono', monospace; font-size: .62rem; color: var(--fg-mute);
+      letter-spacing: .08em;
+    }
+    .cs-step-body { display: flex; flex-direction: column; gap: 4px; }
+    .cs-step-name { font-size: .92rem; font-weight: 600; color: var(--fg); }
+    .cs-step-desc { font-size: .85rem; color: var(--fg-dim); line-height: 1.6; }
+    .cs-skills { margin-bottom: 40px; padding: 20px 24px; background: var(--border); border-radius: 4px; }
+    .cs-skills-label {
+      font-family: 'DM Mono', monospace; font-size: .60rem; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--fg-mute); display: block; margin-bottom: 8px;
+    }
+    .cs-skills-text { font-size: .88rem; color: var(--fg-dim); line-height: 1.6; }
+    @media (max-width: 700px) {
+      .cs-highlights { grid-template-columns: 1fr 1fr; }
+      .cs-grid { grid-template-columns: 1fr; }
+      .cs-meta { gap: 20px; }
+    }
+    @media (max-width: 700px) {
+      .cs-inner { padding: 72px 6vw 48px; }
+      .cs-title { font-size: clamp(1.8rem, 8vw, 3rem); }
+      .cs-intro { font-size: 1rem; margin-bottom: 36px; }
+      .cs-image { aspect-ratio: 4/3; margin-bottom: 40px; }
+      .cs-meta { flex-direction: column; gap: 14px; margin-bottom: 36px; }
+      .cs-company { margin-bottom: 28px; }
+      .cs-grid { gap: 28px; margin-bottom: 40px; }
+      .cs-hl-stat { font-size: 1.6rem; }
+      .cs-highlights { margin-bottom: 40px; gap: 2px; }
+      .cs-process { margin-bottom: 40px; }
+      .cs-step { grid-template-columns: 36px 1fr; padding: 14px 0; }
+      .cs-skills { margin-bottom: 28px; }
+    }
+    @media (max-width: 420px) {
+      .cs-inner { padding: 64px 5vw 40px; }
+      .cs-highlights { grid-template-columns: 1fr 1fr; gap: 2px; }
+      .cs-image { aspect-ratio: 1/1; }
+    }
+    .cs-divider { height: 1px; background: var(--border); margin-bottom: 40px; }
+    .cs-nav {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .cs-nav-btn {
+      font-family: 'DM Mono', monospace; font-size: .72rem; letter-spacing: .10em;
+      text-transform: uppercase; color: var(--fg-dim); background: none; border: none;
+      cursor: none; transition: color .2s; padding: 0;
+    }
+    .cs-nav-btn:hover { color: var(--fg); }
+    .cs-nav-num {
+      font-family: 'DM Mono', monospace; font-size: .68rem; color: var(--fg-mute);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="cursor-dot"></div>
+  <div id="cursor-ring"></div>
+
+  <!-- Header -->
+  <header id="top-bar">
+    <div class="top-left"><a href="index.html" class="brand">Enora Minot</a></div>
+    <ul class="top-nav">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="work.html" class="active">Work</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="#contact">Contact</a></li>
+    </ul>
+    <div class="top-right">
+      <button class="ctrl-btn theme-btn" data-theme-val="light" aria-label="Light mode">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+      <div class="ctrl-sep"></div>
+      <button class="ctrl-btn theme-btn active" data-theme-val="dark" aria-label="Dark mode">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button class="ctrl-btn mob-btn" id="mob-open" aria-label="Open menu">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mobile nav overlay -->
+  <div class="mob-nav" id="mob-nav">
+    <button class="mob-nav-close" id="mob-close" aria-label="Close menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="mob-theme">
+      <button class="ctrl-btn theme-btn" data-theme-val="light" aria-label="Light mode">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+      <button class="ctrl-btn theme-btn" data-theme-val="dark" aria-label="Dark mode">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+    <div class="mob-nav-links">
+      <a href="index.html">Home</a>
+      <a href="work.html">Work</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+    </div>
+  </div>
+
+  <!-- Horizontal strip -->
+  <div class="h-viewport" id="h-viewport">
+    <div class="h-track" id="h-track">
+
+      <article class="h-item" data-idx="5">
+        <div class="item-ph">
+          <span class="item-num">01 / 06</span>
+          <img src="assets/content-management.png" alt="Platform Content Management">
+        </div>
+        <div class="item-body">
+          <div>
+            <span class="item-tag-corner">UX · Research · 2025</span>
+            <h2 class="item-title">Platform Content <em>Management</em></h2>
+          </div>
+          <a href="#" class="item-link">View project ↗</a>
+        </div>
+      </article>
+
+      <article class="h-item" data-idx="4">
+        <div class="item-ph">
+          <span class="item-num">02 / 06</span>
+          <img src="assets/studio-framework.png" alt="Studio Framework">
+        </div>
+        <div class="item-body">
+          <div>
+            <span class="item-tag-corner">Design System · 2025</span>
+            <h2 class="item-title">Studio <em>Framework</em></h2>
+          </div>
+          <a href="#" class="item-link">View project ↗</a>
+        </div>
+      </article>
+
+      <article class="h-item" data-idx="3">
+        <div class="item-ph">
+          <span class="item-num">03 / 06</span>
+          <img src="assets/group-displacement.png" alt="Group Displacement Calculator">
+        </div>
+        <div class="item-body">
+          <div>
+            <span class="item-tag-corner">UX · Strategy · 2025</span>
+            <h2 class="item-title">Group Displacement <em>Calculator</em></h2>
+          </div>
+          <a href="#" class="item-link">View project ↗</a>
+        </div>
+      </article>
+
+      <article class="h-item" data-idx="2">
+        <div class="item-ph">
+          <span class="item-num">04 / 06</span>
+          <img src="assets/ai-annotations.png" alt="AI Annotations Builder">
+        </div>
+        <div class="item-body">
+          <div>
+            <span class="item-tag-corner">AI · Dev Tools · 2024</span>
+            <h2 class="item-title">AI Annotations <em>Builder</em></h2>
+          </div>
+          <a href="#" class="item-link">View project ↗</a>
+        </div>
+      </article>
+
+      <article class="h-item" data-idx="1">
+        <div class="item-ph">
+          <span class="item-num">05 / 06</span>
+          <img src="assets/transformation-hub.png" alt="Transformation Hub">
+        </div>
+        <div class="item-body">
+          <div>
+            <span class="item-tag-corner">Product Design · 2023</span>
+            <h2 class="item-title">Transformation <em>Hub</em></h2>
+          </div>
+          <a href="#" class="item-link">View project ↗</a>
+        </div>
+      </article>
+
+      <article class="h-item" data-idx="0">
+        <div class="item-ph">
+          <span class="item-num">06 / 06</span>
+          <img src="assets/admin-console.png" alt="Admin Console & Analytics">
+        </div>
+        <div class="item-body">
+          <div>
+            <span class="item-tag-corner">Product Design · 2022</span>
+            <h2 class="item-title">Admin Console <em>&amp; Analytics</em></h2>
+          </div>
+          <a href="#" class="item-link">View project ↗</a>
+        </div>
+      </article>
+
+    </div>
+  </div>
+
+  <span class="page-hint" id="drag-hint">Drag to Explore</span>
+  <div class="h-progress"><div class="h-progress-fill" id="h-fill"></div></div>
+
+  <!-- Case study overlay (outside track to avoid transform inheritance) -->
+  <div id="cs-overlay"><div class="cs-inner" id="cs-inner"></div></div>
+  <button id="cs-close" aria-label="Close project">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+
+  <footer class="site-footer">
+    <span>© 2026 Enora Minot</span>
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="work.html">Work</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+    </nav>
+  </footer>
+
+  <script>
+    /* ── Cursor ─────────────────────────────────────── */
+    const cDot = document.getElementById('cursor-dot');
+    const cRing = document.getElementById('cursor-ring');
+    let mx = -200, my = -200, rx = -200, ry = -200;
+    document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+    (function tick() {
+      rx += (mx-rx)*0.12; ry += (my-ry)*0.12;
+      cDot.style.left = mx+'px'; cDot.style.top = my+'px';
+      cRing.style.left = rx+'px'; cRing.style.top = ry+'px';
+      requestAnimationFrame(tick);
+    })();
+    document.querySelectorAll('a,button,.h-item').forEach(el => {
+      el.addEventListener('mouseenter', () => cRing.classList.add('hovering'));
+      el.addEventListener('mouseleave', () => cRing.classList.remove('hovering'));
+    });
+
+    /* ── Theme ──────────────────────────────────────── */
+    const html = document.documentElement;
+    const saved = localStorage.getItem('theme') || 'dark';
+    html.setAttribute('data-theme', saved);
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.themeVal === saved);
+      btn.addEventListener('click', () => {
+        const v = btn.dataset.themeVal;
+        html.setAttribute('data-theme', v); localStorage.setItem('theme', v);
+        document.querySelectorAll('.theme-btn').forEach(b => b.classList.toggle('active', b.dataset.themeVal === v));
+        document.getElementById('mob-nav').classList.remove('open');
+      });
+    });
+
+    /* ── Project data ───────────────────────────────── */
+    const PROJECTS = [
+      { tag: 'Product Design · 2022', num: '01 / 06', next: 1,
+        img: 'assets/admin-console.png',
+        title: 'Admin Console <em>&amp; Analytics</em>',
+        company: 'Celonis', role: 'Product / UX Designer', timeline: 'Q2 → Q3 2022', team: 'PM · Engineering Lead · Data Analysts',
+        intro: 'The Celonis Admin Console was overwhelming enterprise admins — scattered settings, inconsistent labels, and zero visibility into how their teams were using the platform. Admins were resorting to spreadsheets and support tickets just to get basic usage data.',
+        problem: 'The console was overwhelming: scattered controls, inconsistent labels, and no central place to monitor platform usage. Admins relied on spreadsheets and the support team to get basic insights.',
+        approach: 'Led end-to-end research (customer interviews, heuristic evaluation, usage analytics, benchmarking against Zendesk, Adobe, Google) followed by card sorting to restructure the information architecture. Ran collaborative definition workshops, then redesigned the console UI and introduced a brand new Platform Usage dashboard tracking logins, active users, and asset engagement.',
+        result: '50% drop in navigation-related support tickets · +30% admin satisfaction (NPS) · 70% dashboard adoption in the first quarter.',
+        skills: 'User research · IA restructuring · Card sorting · Data dashboard design · Enterprise UX · Dev handoff',
+        highlights: [
+          { stat: '50%', label: 'drop in support tickets related to console navigation (2 months post-launch)' },
+          { stat: '+30%', label: 'increase in admin satisfaction, measured via internal NPS survey' },
+          { stat: '70%', label: 'Usage Dashboard adoption rate within the first quarter' },
+          { stat: '4', label: 'user personas interviewed including enterprise admins, PMs, and customer support' },
+        ],
+        process: [
+          { step: 'Research', desc: 'Interviews with enterprise admins, heuristic audit, usage analytics, and competitive benchmarking.' },
+          { step: 'Define', desc: 'Collaborative workshop to map user journeys, define use cases, and align on success metrics with PM and engineering.' },
+          { step: 'IA & Ideation', desc: 'Card sorting to validate new groupings. Crazy 8s to generate layout concepts. Early concept reviews with internal admins.' },
+          { step: 'UI Redesign', desc: 'Cleaned up visual hierarchy with clearer typography, spacing, and section structure. Rebuilt navigation around admin mental models.' },
+          { step: 'Usage Dashboard', desc: 'Designed a new Platform Usage tab: daily/weekly active users, most-viewed processes, pipeline health, and anomaly alerts.' },
+        ]
+      },
+      { tag: 'Product Design · 2023', num: '02 / 06', next: 2,
+        img: 'assets/transformation-hub.png',
+        title: 'Transformation <em>Hub</em>',
+        company: 'Celonis', role: 'Lead UX Researcher & Product Designer', timeline: 'Dec 2022 → Sep 2023', team: 'PMs · Engineers · Customer Success · Data Stakeholders',
+        intro: 'Led end-to-end research and design of Transformation Hub — a new Celonis product that gives enterprises a single source of truth for the business value generated by their process improvement initiatives.',
+        problem: 'Enterprise customers could not measure, communicate, or scale the ROI of their Celonis investment. Value data lived in scattered spreadsheets and slide decks, creating friction during renewals and executive reviews.',
+        approach: 'Ran 11 stakeholder interviews across CSMs, business users, and executives. Shadowed value engineers, analyzed existing workarounds, and surveyed customers across industries. Designed an opportunity workflow covering creation, value estimation, tracking, reporting, and sharing — tested iteratively with real users.',
+        result: 'Complex multi-stakeholder product shipped in under 9 months with outstanding reception.',
+        highlights: [
+          { stat: '<9mo', label: 'from discovery to launch for a complex multi-stakeholder enterprise product' },
+          { stat: '11', label: 'stakeholder interviews across CSMs, value engineers, and executive sponsors' },
+          { stat: '2024', label: 'key enterprise deal renewals influenced directly by the Transformation Hub' },
+          { stat: '100%', label: 'handover with documentation, guidelines, and research to enable future iterations' },
+        ],
+        process: [
+          { step: 'Discovery', desc: 'Stakeholder interviews, workflow shadowing, analysis of workaround tools (Excel trackers, PowerPoint decks), and customer surveys.' },
+          { step: 'Personas & Journeys', desc: 'Created detailed personas (CSMs, Transformation Leads, Executives) and mapped current-state vs. desired user journeys.' },
+          { step: 'Iterative Design', desc: 'Rapid prototyping in Figma, moderated usability testing, and clickstream testing to validate navigation patterns across multiple cycles.' },
+          { step: 'Opportunity Workflow', desc: 'Designed the core flow: create opportunity → estimate value → track implementation → report realized impact → share with stakeholders.' },
+          { step: 'Adoption & Evaluation', desc: 'Embedded usage tracking and feedback prompts. Co-hosted onboarding sessions for CSMs. Evaluated adoption and impact post-launch.' },
+        ]
+      },
+      { tag: 'AI · Dev Tools · 2024', num: '03 / 06', next: 3,
+        img: 'assets/ai-annotations.png',
+        title: 'AI Annotations <em>Builder</em>',
+        company: 'Celonis', role: 'Principal Product Designer', timeline: 'Q1 2024', team: 'Celonis AI Squad',
+        intro: 'Developers in Celonis Studio had no centralized way to configure, schedule, or monitor AI annotation pipelines. Everything was manual, scattered, and opaque — especially for high-stakes use cases like duplicate invoice detection.',
+        problem: 'Developers lacked a centralized mechanism to manage AI annotation processes. Configuration was manual, scheduling was fragmented, and there was no visibility into annotation performance — especially critical for duplicate detection use cases.',
+        approach: 'Embedded deeply into the AI squad to understand both the user context and the technical ecosystem (ML pipelines, APIs, scheduling layers). Went from ecosystem mapping and HMW workshops through lo-fi sketches and user flow mapping to polished high-fidelity screens and a dev handoff. Delivered a full configuration builder, scheduling interface, monitoring dashboard with KPIs and logs, and error/empty state coverage.',
+        result: 'A no-code annotation experience that dramatically reduces setup time and surfaces actionable monitoring data.',
+        skills: 'Developer-focused UX · Technical domain research · Systems design · AI/ML product design · Component library usage · End-to-end delivery',
+        highlights: [
+          { stat: '50%', label: 'targeted reduction in time to integrate a new AI annotation use case' },
+          { stat: '3', label: 'core flows designed: configure models, schedule jobs, monitor performance' },
+          { stat: '0', label: 'code required — natural language rule definition lowers the AI adoption barrier' },
+          { stat: '1st', label: 'use case shipped: Duplicate Checker for identifying records across datasets' },
+        ],
+        process: [
+          { step: 'Context & Tech Deep-Dive', desc: 'Developer interviews, workflow analysis, and exploration of AI annotation service capabilities, data flows, and scheduling constraints.' },
+          { step: 'Ideation', desc: 'HMW workshops, feature storming, low-fidelity sketching, and user flow mapping for configure, schedule, and monitor scenarios.' },
+          { step: 'Wireframing', desc: 'Rapid wireframes to validate navigation patterns, model selection flows, and monitoring dashboard layouts.' },
+          { step: 'High-Fidelity Design', desc: 'Pixel-precise UI using Celonis component library. Designed micro-interactions, loading states, error handling, and empty states.' },
+          { step: 'Handoff & Evaluation', desc: 'Detailed Figma specs, interaction flows, and developer documentation. Evaluation targets: setup time reduction, error rate, and CSAT improvement.' },
+        ]
+      },
+      { tag: 'UX · Strategy · 2025', num: '04 / 06', next: 4,
+        img: 'assets/group-displacement.png',
+        title: 'Group Displacement <em>Calculator</em>',
+        company: 'RoomPriceGenie', role: 'UX Designer (Design Challenge)', timeline: 'Q1 2025', team: 'Solo project',
+        intro: 'A solo, end-to-end design challenge completed in ~9 hours. The problem: hoteliers have no reliable way to evaluate whether accepting a group booking is more profitable than individual transient guests.',
+        problem: '85% of travelers cite price as the top booking factor, and a 20% rate change can halve or double bookings. Yet hotel teams had no structured tool to evaluate group displacement — relying on gut feeling or spreadsheets for high-stakes decisions.',
+        approach: 'Designed a strategic pricing tool from scratch — a quotation management table, a drawer-based creation flow, a real-time calculation preview with live revenue comparison, and full status lifecycle management (Pending, Approved, Rejected). Prioritized speed, clarity, and business impact over complexity.',
+        result: 'An end-to-end UX for revenue-critical decisions — fast to use, easy to understand, designed for non-technical hotel staff.',
+        skills: 'Problem framing · Interaction design · UI design · Business thinking · Autonomous delivery',
+        highlights: [
+          { stat: '~9h', label: 'solo end-to-end design challenge from problem framing to final screens' },
+          { stat: '2', label: 'step calculation flow — data entry then live interactive refinement' },
+          { stat: '85%', label: 'of travelers say price is the most important factor when choosing a hotel' },
+          { stat: '∞', label: 'rate override — users adjust the suggested price and see P&L impact instantly' },
+        ],
+        process: [
+          { step: 'Problem Framing', desc: 'Market research on hospitality pricing dynamics, competitive landscape, and how hotel teams currently evaluate group requests.' },
+          { step: 'Entry Point Design', desc: 'Designed a dedicated tab under Pricing Strategy — centralizing new quotations, history, and performance metrics in one hub.' },
+          { step: 'Calculation Flow', desc: 'Drawer component with two phases: structured data entry, then real-time comparison table with adjustable rate parameters.' },
+          { step: 'Interactive Refinement', desc: 'Users can override rates, adjust discount share, and see projected revenue impact live — with tooltips explaining each pricing concept.' },
+          { step: 'Quotation Lifecycle', desc: 'Status management (Pending / Approved / Rejected) with badge-style dropdowns, view-only modes, and duplicate-for-reuse functionality.' },
+        ]
+      },
+      { tag: 'Design System · 2025', num: '05 / 06', next: 5,
+        img: 'assets/studio-framework.png',
+        title: 'Studio <em>Framework</em>',
+        company: 'Celonis', role: 'Principal Product Designer', timeline: 'Q1 → Q2 2025', team: 'Designers · PMs · Engineers · Design System Team',
+        intro: 'Built the first unified design framework for Celonis Studio — a centralized Figma file and Supernova documentation that gives every team building Studio assets a shared language, reusable components, and clear design standards.',
+        problem: 'Studio had 17 assets across multiple teams — with no shared rules. Each asset evolved in isolation, producing inconsistent layouts, conflicting interaction patterns, and terminology mismatches that confused users and slowed development.',
+        approach: 'Conducted internal interviews with designers, engineers, and PMs. Mapped asset lifecycles, audited UI inconsistencies, ran card sorting to understand navigation patterns. Built a 4-part Figma file (components, layouts, guidelines, feedback zones) and authored Supernova documentation with anatomy, usage rules, and code links.',
+        result: 'The Studio Framework became the foundation for every new asset built in Studio.',
+        highlights: [
+          { stat: '17', label: 'Studio assets audited, with 7+ directly impacted assets in dev or beta phase' },
+          { stat: '4', label: 'content areas in the Figma file: components, layouts, guidelines, and feedback zones' },
+          { stat: '1', label: 'source of truth — Supernova documentation used by design, engineering, and product' },
+          { stat: '↑', label: 'design velocity across teams, reducing redundant work and alignment overhead' },
+        ],
+        process: [
+          { step: 'Research & Audit', desc: 'Internal interviews with designers and engineers. Asset lifecycle mapping and UI audit to identify inconsistencies and missing guidance.' },
+          { step: 'Card Sorting', desc: 'Validated how Studio users classify content and navigate to inform the framework structure and terminology.' },
+          { step: 'Figma Framework', desc: 'Built foundational components (headers, tables, modals, forms), reusable layout templates, and a live feedback zone for ongoing UX gaps.' },
+          { step: 'Supernova Documentation', desc: 'Authored component anatomy, states, usage rules, do & don\'t examples, interaction patterns, and code snippets for engineering.' },
+          { step: 'Iteration & Adoption', desc: 'Used the file as a live collaborative review tool. Continuously integrated insights from cross-functional teams as new assets were built.' },
+        ]
+      },
+      { tag: 'UX · Research · 2025', num: '06 / 06', next: 0,
+        img: 'assets/content-management.png',
+        title: 'Platform Content <em>Management</em>',
+        company: 'Celonis', role: 'Principal Product Designer', timeline: 'Q1 → Q2 2025', team: 'PM · Engineering Lead · Data Analysts (AI & Automation)',
+        intro: 'An end-to-end UX research and design project embedded in a Master Thesis. The challenge: Studio users could not efficiently find, manage, or organize their assets across a complex hierarchy.',
+        problem: 'Studio users struggled with overwhelming navigation, unclear entity hierarchy, and an underpowered table that offered little customization. Bulk operations were missing, search was weak, and finding the right asset required too many clicks.',
+        approach: 'Led foundational research with 8 users, ran usability tests on mockups, benchmarked 7 competitors, and mapped full user flows. Designed a new content management system featuring a hierarchical homepage, customizable data grid, bulk actions, asset previews, and smarter filters. Closed the loop by defining UX metrics and tracking events in collaboration with engineers and data analysts.',
+        result: 'A more intuitive, scalable asset management experience grounded in real user workflows.',
+        skills: 'User research · Usability testing · Systems thinking · Data analysis · Cross-functional collaboration',
+        highlights: [
+          { stat: '8', label: 'users in research and usability testing sessions — value engineers and internal Studio users' },
+          { stat: '7', label: 'competitors benchmarked to identify baseline expectations and differentiation opportunities' },
+          { stat: '4', label: 'bulk actions designed: Move, Add to Starred, Publish, and Delete' },
+          { stat: '2', label: 'density modes: compact for power users, comfortable for casual browsing' },
+        ],
+        process: [
+          { step: 'Foundational Research', desc: '8 user interviews exploring navigation habits, content management pain points, and workflow blockers across user types.' },
+          { step: 'Benchmarking', desc: 'Analyzed Figma, Google Drive, Notion, and enterprise tools to identify baseline expectations and differentiation opportunities.' },
+          { step: 'User Flow Mapping', desc: 'Mapped all paths users take to list, navigate, create, manage, and delete entities — surfacing decision points and drop-offs.' },
+          { step: 'Design Solutions', desc: 'Hierarchical homepage, customizable columns, density toggle, zebra striping, card-style previews, bulk selection, and inline editing.' },
+          { step: 'Usability Testing & Metrics', desc: 'Validated proposals with 8 participants. Defined UX metrics framework covering discovery, efficiency, and workflow completion rates.' },
+        ]
+      },
+    ];
+
+    /* ── Overlay expand / collapse ──────────────────── */
+    const overlay   = document.getElementById('cs-overlay');
+    const csInner   = document.getElementById('cs-inner');
+    const csClose   = document.getElementById('cs-close');
+    let openIdx     = -1;
+    let savedRect   = null;
+    let dragLocked  = false;
+
+    function renderProject(idx) {
+      const p = PROJECTS[idx];
+      const nextP = PROJECTS[p.next];
+      const hlCards = p.highlights.map(h => `
+        <div class="cs-hl-card">
+          <span class="cs-hl-stat">${h.stat}</span>
+          <span class="cs-hl-label">${h.label}</span>
+        </div>`).join('');
+      const steps = p.process.map((s, i) => `
+        <div class="cs-step">
+          <span class="cs-step-num">0${i+1}</span>
+          <div class="cs-step-body">
+            <span class="cs-step-name">${s.step}</span>
+            <span class="cs-step-desc">${s.desc}</span>
+          </div>
+        </div>`).join('');
+      csInner.innerHTML = `
+        <span class="cs-label">${p.tag}</span>
+        <h2 class="cs-title">${p.title}</h2>
+        ${p.company ? `<p class="cs-company">${p.company}</p>` : ''}
+        <div class="cs-meta">
+          <div class="cs-meta-item"><span class="cs-meta-label">Role</span><span class="cs-meta-value">${p.role}</span></div>
+          <div class="cs-meta-item"><span class="cs-meta-label">Timeline</span><span class="cs-meta-value">${p.timeline}</span></div>
+          <div class="cs-meta-item"><span class="cs-meta-label">Team</span><span class="cs-meta-value">${p.team}</span></div>
+        </div>
+        <div class="cs-image">${p.img ? `<img src="${p.img}" alt="${p.title.replace(/<[^>]+>/g,'')}">` : `<span class="cs-image-label">Project image</span>`}</div>
+        <p class="cs-intro">${p.intro}</p>
+        <div class="cs-grid">
+          <div><span class="cs-col-label">Challenge</span><p class="cs-col-text">${p.problem}</p></div>
+          <div><span class="cs-col-label">Approach</span><p class="cs-col-text">${p.approach}</p></div>
+          <div><span class="cs-col-label">Outcome</span><p class="cs-col-text">${p.result}</p></div>
+        </div>
+        <div class="cs-highlights">${hlCards}</div>
+        <div class="cs-process">
+          <span class="cs-process-title">Design Process</span>
+          <div class="cs-process-steps">${steps}</div>
+        </div>
+        ${p.skills ? `<div class="cs-skills"><span class="cs-skills-label">Skills demonstrated</span><p class="cs-skills-text">${p.skills}</p></div>` : ''}
+        <div class="cs-divider"></div>
+        <div class="cs-nav">
+          <span class="cs-nav-num">${p.num}</span>
+          <button class="cs-nav-btn" id="cs-next-btn">Next: ${nextP.title.replace(/<[^>]+>/g,'')} →</button>
+        </div>`;
+      document.getElementById('cs-next-btn').addEventListener('click', () => {
+        overlay.scrollTop = 0;
+        renderProject(p.next);
+        openIdx = p.next;
+      });
+    }
+
+    function expandCard(item) {
+      if (dragLocked) return;
+      const rect = item.getBoundingClientRect();
+      savedRect  = rect;
+      openIdx    = parseInt(item.dataset.idx);
+      dragLocked = true;
+
+      renderProject(openIdx);
+
+      overlay.style.cssText = `
+        display:block; position:fixed;
+        top:${rect.top}px; left:${rect.left}px;
+        width:${rect.width}px; height:${rect.height}px;
+        border-radius:4px; overflow:hidden; transition:none; opacity:1;`;
+      overlay.offsetHeight;
+
+      const T = '.72s cubic-bezier(.22,1,.36,1)';
+      overlay.style.transition = `top ${T},left ${T},width ${T},height ${T},border-radius ${T}`;
+      overlay.style.top    = '0'; overlay.style.left   = '0';
+      overlay.style.width  = '100vw'; overlay.style.height = '100dvh';
+      overlay.style.borderRadius = '0';
+
+      setTimeout(() => {
+        overlay.style.overflow = '';
+        overlay.classList.add('ready');
+        csClose.classList.add('visible');
+      }, 720);
+    }
+
+    function collapseCard() {
+      if (openIdx < 0) return;
+      overlay.scrollTop = 0;
+      overlay.classList.remove('ready');
+      csClose.classList.remove('visible');
+
+      const rect = savedRect;
+      const T = '.6s cubic-bezier(.22,1,.36,1)';
+      overlay.style.transition = `top ${T},left ${T},width ${T},height ${T},border-radius ${T},opacity .35s .28s`;
+      overlay.style.top    = rect.top  + 'px'; overlay.style.left   = rect.left  + 'px';
+      overlay.style.width  = rect.width + 'px'; overlay.style.height = rect.height + 'px';
+      overlay.style.borderRadius = '4px'; overlay.style.opacity = '0';
+
+      setTimeout(() => {
+        overlay.style.cssText = 'display:none;';
+        openIdx = -1; dragLocked = false;
+      }, 660);
+    }
+
+    csClose.addEventListener('click', collapseCard);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') collapseCard(); });
+
+    /* ── Horizontal drag strip ──────────────────────── */
+    const viewport = document.getElementById('h-viewport');
+    const track    = document.getElementById('h-track');
+    const fillEl   = document.getElementById('h-fill');
+    const hint     = document.getElementById('drag-hint');
+
+    let pos = 0, vel = 0;
+    let dragging = false, startX = 0, startPos = 0, mdX = 0, mdY = 0, didMove = false;
+
+    function getMinX() { return -(track.scrollWidth - window.innerWidth); }
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    function updateProgress() {
+      const t = clamp(-pos / Math.abs(getMinX()), 0, 1);
+      fillEl.style.width = (t * 100) + '%';
+    }
+
+    (function loop() {
+      requestAnimationFrame(loop);
+      if (dragLocked) return;
+      if (!dragging) {
+        vel *= 0.88;
+        pos = clamp(pos + vel, getMinX(), 0);
+        if (Math.abs(vel) < 0.05) { vel = 0; }
+        else if (Math.abs(vel) > 0.5) { applyDragBlur(vel); }
+        else { releaseDragBlur(); }
+      }
+      const skew = clamp(vel * 0.18, -12, 12);
+      track.style.transform = `translateX(${pos}px) skewX(${skew}deg)`;
+      updateProgress();
+    })();
+
+    viewport.addEventListener('mousedown', e => {
+      if (e.target.closest('header,button') || dragLocked) return;
+      dragging = true; startX = e.clientX; startPos = pos; vel = 0;
+      mdX = e.clientX; mdY = e.clientY; didMove = false;
+      cRing.classList.add('drag'); hint.classList.add('hidden');
+    });
+    window.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      if (Math.hypot(e.clientX - mdX, e.clientY - mdY) > 6) didMove = true;
+      const next = clamp(startPos + (e.clientX - startX), getMinX(), 0);
+      vel = next - pos; pos = next;
+      applyDragBlur(vel);
+    });
+    window.addEventListener('mouseup', e => {
+      if (!dragging) return;
+      dragging = false; cRing.classList.remove('drag');
+      releaseDragBlur();
+      if (!didMove) {
+        const item = e.target.closest('.h-item');
+        if (item) expandCard(item);
+      }
+    });
+
+    viewport.addEventListener('touchstart', e => {
+      startX = e.touches[0].clientX; startPos = pos; vel = 0; dragging = true;
+      mdX = e.touches[0].clientX; mdY = e.touches[0].clientY; didMove = false;
+      hint.classList.add('hidden');
+    }, { passive: true });
+    window.addEventListener('touchmove', e => {
+      if (!dragging) return;
+      if (Math.hypot(e.touches[0].clientX - mdX, e.touches[0].clientY - mdY) > 6) didMove = true;
+      const next = clamp(startPos + (e.touches[0].clientX - startX), getMinX(), 0);
+      vel = next - pos; pos = next;
+      applyDragBlur(vel);
+    }, { passive: true });
+    window.addEventListener('touchend', e => {
+      if (!dragging) return;
+      dragging = false;
+      releaseDragBlur();
+      if (!didMove) {
+        const item = e.target.closest('.h-item');
+        if (item) expandCard(item);
+      }
+    });
+
+    viewport.addEventListener('wheel', e => {
+      if (dragLocked) return;
+      e.preventDefault();
+      vel = clamp(vel + e.deltaY * 0.6 + e.deltaX * 0.6, -60, 60);
+      hint.classList.add('hidden');
+      applyDragBlur(vel);
+      clearTimeout(wheelReleaseTimer);
+      wheelReleaseTimer = setTimeout(releaseDragBlur, 180);
+    }, { passive: false });
+
+    let wheelReleaseTimer = null;
+
+    function applyDragBlur(v) {
+      const speed = Math.abs(v);
+      const blur  = Math.min(speed * 0.28, 10);
+      const dim   = Math.max(1 - speed * 0.008, 0.72);
+      track.classList.remove('drag-released');
+      track.classList.add('is-dragging');
+      track.style.setProperty('--drag-blur', blur.toFixed(2) + 'px');
+      track.style.setProperty('--drag-dim',  dim.toFixed(3));
+    }
+
+    function releaseDragBlur() {
+      track.classList.remove('is-dragging');
+      track.classList.add('drag-released');
+      track.style.setProperty('--drag-blur', '0px');
+      track.style.setProperty('--drag-dim',  '1');
+      setTimeout(() => track.classList.remove('drag-released'), 520);
+    }
+
+    /* ── Mobile nav ──────────────────────────────────── */
+    document.getElementById('mob-open').addEventListener('click', () => document.getElementById('mob-nav').classList.add('open'));
+    document.getElementById('mob-close').addEventListener('click', () => document.getElementById('mob-nav').classList.remove('open'));
+    document.querySelectorAll('.mob-nav-links a').forEach(a => a.addEventListener('click', () => document.getElementById('mob-nav').classList.remove('open')));
+  </script>
+</body>
+</html>
