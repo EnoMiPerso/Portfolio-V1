@@ -121,10 +121,16 @@
 
     /* ── Responsive ──────────────────────────────────── */
     @media (max-width: 680px) {
-      #top-bar { padding: 18px 20px; }
+      #top-bar { padding: 18px 54px 18px 20px; }
       .top-nav { display: none; }
       .top-right .theme-btn, .ctrl-sep { display: none; }
-      .mob-btn { display: flex !important; }
+      .mob-btn {
+        display: flex !important;
+        position: fixed;
+        top: 18px;
+        right: 16px;
+        z-index: 120;
+      }
       #contact-section { padding: 0 6vw; align-items: flex-start; padding-top: 110px; }
       .contact-title { font-size: clamp(1.8rem, 7vw, 3rem); margin-bottom: 28px; }
       .page-hint { right: 20px; bottom: 60px; font-size: .58rem; }
@@ -280,6 +286,7 @@
       (function frame() {
         requestAnimationFrame(frame);
         const t = (performance.now()-t0)/1000;
+        const isLight = document.documentElement.getAttribute('data-theme') === 'light';
         const asp = W/H;
         cX += (tX-cX)*0.10; cY += (tY-cY)*0.10; cScr += (tScr-cScr)*0.04;
 
@@ -331,13 +338,33 @@
             if (alpha<0.012||r<0.7) continue;
 
             const warm=Math.min(1,ring*0.9+rG*0.5);
-            const R=Math.round(200+warm*55), G=Math.round(232-warm*10), B=Math.round(255-warm*40);
+            let R, G, B, iR, iG, iB, oR, oG, oB;
+            if (isLight) {
+              /* Near-black dots + subtle radial gradient (still readable on cream) */
+              R = Math.min(48, Math.round(6 + warm * 14 + n * 10));
+              G = Math.min(46, Math.round(5 + warm * 12 + n * 9));
+              B = Math.min(52, Math.round(8 + warm * 11 + n * 8));
+              iR = Math.max(0, R - 10); iG = Math.max(0, G - 8); iB = Math.max(0, B - 8);
+              oR = Math.min(72, R + 18); oG = Math.min(70, G + 16); oB = Math.min(76, B + 14);
+            } else {
+              /* Pure black vanishes on dark bg — soft light neutrals with cool gradient */
+              R = Math.round(218 + warm * 28 + n * 12);
+              G = Math.round(220 + warm * 24 + n * 10);
+              B = Math.round(232 + warm * 18 + n * 8);
+              R = Math.min(255, R); G = Math.min(255, G); B = Math.min(255, B);
+              iR = Math.min(255, Math.round(R + (255 - R) * 0.35)); iG = Math.min(255, Math.round(G + (255 - G) * 0.32)); iB = Math.min(255, Math.round(B + (255 - B) * 0.28));
+              oR = Math.max(140, Math.round(R * 0.82)); oG = Math.max(145, Math.round(G * 0.84)); oB = Math.max(160, Math.round(B * 0.86));
+            }
 
             const glow=(ring+rG)*6;
             ctx.shadowBlur  = glow>0.5 ? glow : 0;
-            ctx.shadowColor = `rgba(${R},${G},${B},0.55)`;
+            ctx.shadowColor = isLight ? `rgba(${oR},${oG},${oB},0.35)` : `rgba(${iR},${iG},${iB},0.45)`;
             ctx.globalAlpha = alpha;
-            ctx.fillStyle   = `rgb(${R},${G},${B})`;
+            const g = ctx.createRadialGradient(px, py, 0, px, py, r);
+            g.addColorStop(0, `rgb(${iR},${iG},${iB})`);
+            g.addColorStop(0.52, `rgb(${R},${G},${B})`);
+            g.addColorStop(1, `rgb(${oR},${oG},${oB})`);
+            ctx.fillStyle = g;
             ctx.beginPath(); ctx.arc(px, py, r, 0, Math.PI*2); ctx.fill();
           }
         }

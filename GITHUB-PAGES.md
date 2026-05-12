@@ -23,11 +23,24 @@ git push -u origin main
 ```
 
 **Option B — Manual upload on GitHub**  
-1. Open the repo → **Add file** → **Upload files**.  
-2. Drag in **everything** at once: all `.html` files, the whole **`assets/`** folder (all images and `.mp4` files), **`.nojekyll`**, and optionally `.gitignore`, `README.md`, this file, `MANIFEST-PAGES-DEPLOY.txt`.  
-3. Missing **`assets/`** is the most common reason images or video break on Pages.
+GitHub’s web UI only accepts **about 100 files per upload**, so the repo splits media into subfolders (each stays under that limit):
 
-A full list of paths to include is in **`MANIFEST-PAGES-DEPLOY.txt`** (regenerate with `find` if you add files).
+| Folder under `assets/` | Role |
+|------------------------|------|
+| `fms/` | File management case study (56 files) |
+| `transformation-hub/` | Transformation Hub + `th-*` slides (45) |
+| `smart-inputs/` | Smart inputs & variables (41) |
+| `ai-annotations/` | AI annotations (31) |
+| `studio/` | Studio framework (23) |
+| `platform/` | Admin / hi-fi / IA / research / def-ideation (27) |
+| `rpg/` | Group displacement / RPG (13) |
+
+Upload in **separate commits**, e.g. one commit per folder: **Add file → Upload files** → select every file inside `assets/fms/` (under 100), commit. Repeat for `transformation-hub/`, `smart-inputs/`, `ai-annotations/`, `studio/`, `platform/`, and `rpg/`. Then upload all **`.html`** files, **`.nojekyll`**, and optional meta files (`README.md`, this file, `MANIFEST-PAGES-DEPLOY.txt`).
+
+**Option B2 — Still too many clicks**  
+Use **Git push** or **GitHub Desktop** once; there is no per-file cap.
+
+A full list of paths is in **`MANIFEST-PAGES-DEPLOY.txt`** (regenerate with `find` if you add files).
 
 ---
 
@@ -49,7 +62,7 @@ GitHub Pages can run **Jekyll** on pushes. An empty **`.nojekyll`** file at the 
 
 ## 4. Optional checks
 
-- **Transformation Hub video:** `work.html` references `assets/th-transformation-hub-product-motion.mp4`. That file must exist in `assets/` on the branch Pages deploys, or remove the `videos` entry for that project until the file is added.  
+- **Transformation Hub video:** `work.html` references `assets/transformation-hub/transformation-hub-product-demo.mp4`. That file must exist on the branch Pages deploys, or remove the `videos` entry until it is added.  
 - **Deep links:** `work-project-transformation-hub.html` (and siblings) are full pages with `data-default-project`; open them as  
   `https://<username>.github.io/Portfolio-V1/work-project-transformation-hub.html`  
   after deploy.

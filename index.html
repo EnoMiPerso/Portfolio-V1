@@ -52,7 +52,10 @@
     #cursor-pencil.hovering { opacity: 0.4; }
     #cursor-pencil.drawing  {
       opacity: 1;
-      filter: drop-shadow(0 0 5px var(--fg));
+      filter: drop-shadow(0 0 3px rgba(255,255,255,0.35));
+    }
+    [data-theme="light"] #cursor-pencil.drawing {
+      filter: drop-shadow(0 1px 3px rgba(0,0,0,0.18));
     }
 
 
@@ -203,10 +206,16 @@
 
     /* ─── Responsive ────────────────────────────────── */
     @media (max-width: 680px) {
-      #top-bar { padding: 18px 20px; }
+      #top-bar { padding: 18px 54px 18px 20px; }
       .top-nav { display: none; }
       .top-right .theme-btn, .ctrl-sep { display: none; }
-      .mob-btn { display: flex !important; }
+      .mob-btn {
+        display: flex !important;
+        position: fixed;
+        top: 18px;
+        right: 16px;
+        z-index: 120;
+      }
       .page-hint { right: 20px; bottom: 60px; font-size: .58rem; }
     }
     @media (hover: none) and (pointer: coarse) {
@@ -347,27 +356,78 @@
     resizeDC();
     window.addEventListener('resize', resizeDC);
 
-    const FADE_MS   = 30000;  /* stroke lifetime: 30 s */
-    const MAX_STRK  = 40;     /* max concurrent strokes */
-    const strokes   = [];
-    let   drawing   = false;
-    let   curStroke = null;
-    let   hintGone  = false;
+    const STROKE_HOLD_MS = 120;   /* brief beat after release, then fade */
+    const STROKE_FADE_MS = 320;   /* quick dissolve */
+    const MAX_STRK = 36;
+    const MAX_PARTICLES = 200;
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const strokes = [];
+    const particles = [];
+    let drawing = false;
+    let curStroke = null;
+    let hintGone = false;
 
     function newStroke(x, y) {
-      const s = { pts: [{ x, y }], born: performance.now(),
-                  dark: html.getAttribute('data-theme') === 'dark' };
+      const s = {
+        pts: [{ x, y }],
+        dark: html.getAttribute('data-theme') === 'dark',
+        endedAt: null,
+      };
       strokes.push(s);
-      if (strokes.length > MAX_STRK) strokes.shift();
+      while (strokes.length > MAX_STRK) strokes.shift();
       return s;
+    }
+
+    function spawnParticles(x, y) {
+      if (reduceMotion) return;
+      const n = 2 + (Math.random() > 0.2 ? 1 : 0) + (Math.random() > 0.65 ? 1 : 0);
+      for (let k = 0; k < n; k++) {
+        particles.push({
+          x: x + (Math.random() - 0.5) * 12,
+          y: y + (Math.random() - 0.5) * 12,
+          vx: (Math.random() - 0.5) * 2.0,
+          vy: (Math.random() - 0.5) * 2.0 - 0.75,
+          born: performance.now(),
+          life: 280 + Math.random() * 260,
+          r: 0.55 + Math.random() * 1.5,
+          spin: Math.random() * Math.PI * 2,
+          kind: Math.random() > 0.42 ? 'spark' : 'dot',
+        });
+      }
+      while (particles.length > MAX_PARTICLES) particles.shift();
+    }
+
+    function strokeAlpha(s, now) {
+      if (!s.endedAt) return 1;
+      const t = now - s.endedAt;
+      if (t < STROKE_HOLD_MS) return 1;
+      const u = Math.max(0, Math.min(1, (t - STROKE_HOLD_MS) / STROKE_FADE_MS));
+      const e = u * u * (3 - 2 * u); /* smoothstep — clean exit */
+      return 1 - e;
+    }
+
+    function endCurrentStroke() {
+      if (curStroke) {
+        if (curStroke.pts.length < 2) {
+          const idx = strokes.indexOf(curStroke);
+          if (idx !== -1) strokes.splice(idx, 1);
+        } else {
+          curStroke.endedAt = performance.now();
+        }
+      }
+      drawing = false;
+      curStroke = null;
+      cPencil.classList.remove('drawing');
     }
 
     document.addEventListener('mousedown', e => {
       if (e.target.closest('header')) return;
-      drawing   = true;
+      drawing = true;
       curStroke = newStroke(e.clientX, e.clientY);
+      spawnParticles(e.clientX, e.clientY);
       cPencil.classList.add('drawing');
-      if (!hintGone) { hintGone = true; hint.classList.add('gone'); } // fades out on first draw
+      if (!hintGone) { hintGone = true; hint.classList.add('gone'); }
     });
 
     document.addEventListener('mousemove', e => {
@@ -375,12 +435,10 @@
       const last = curStroke.pts.at(-1);
       if (Math.hypot(e.clientX - last.x, e.clientY - last.y) < 3) return;
       curStroke.pts.push({ x: e.clientX, y: e.clientY });
+      spawnParticles(e.clientX, e.clientY);
     });
 
-    document.addEventListener('mouseup', () => {
-      drawing = false; curStroke = null;
-      cPencil.classList.remove('drawing');
-    });
+    window.addEventListener('mouseup', endCurrentStroke);
 
     /* Touch drawing */
     document.addEventListener('touchstart', e => {
@@ -388,6 +446,7 @@
       const t = e.touches[0];
       drawing = true;
       curStroke = newStroke(t.clientX, t.clientY);
+      spawnParticles(t.clientX, t.clientY);
       if (!hintGone) { hintGone = true; hint.classList.add('gone'); }
     }, { passive: true });
     document.addEventListener('touchmove', e => {
@@ -396,8 +455,9 @@
       const last = curStroke.pts.at(-1);
       if (Math.hypot(t.clientX - last.x, t.clientY - last.y) < 3) return;
       curStroke.pts.push({ x: t.clientX, y: t.clientY });
+      spawnParticles(t.clientX, t.clientY);
     }, { passive: true });
-    document.addEventListener('touchend', () => { drawing = false; curStroke = null; }, { passive: true });
+    document.addEventListener('touchend', endCurrentStroke, { passive: true });
 
     /* Mobile nav */
     document.getElementById('mob-open').addEventListener('click', () => document.getElementById('mob-nav').classList.add('open'));
@@ -408,7 +468,19 @@
     document.addEventListener('dblclick', e => {
       if (e.target.closest('header')) return;
       strokes.length = 0;
+      particles.length = 0;
     });
+
+    function drawStrokePath(s) {
+      ctx.beginPath();
+      ctx.moveTo(s.pts[0].x, s.pts[0].y);
+      for (let j = 1; j < s.pts.length - 1; j++) {
+        const mx2 = (s.pts[j].x + s.pts[j + 1].x) * 0.5;
+        const my2 = (s.pts[j].y + s.pts[j + 1].y) * 0.5;
+        ctx.quadraticCurveTo(s.pts[j].x, s.pts[j].y, mx2, my2);
+      }
+      ctx.lineTo(s.pts.at(-1).x, s.pts.at(-1).y);
+    }
 
     /* ── Render loop ─────────────────────────────────────────── */
     (function render() {
@@ -416,38 +488,102 @@
       ctx.clearRect(0, 0, W, H);
 
       const now = performance.now();
+      const pulse = reduceMotion ? 1 : 0.94 + 0.06 * Math.sin(now * 0.004);
+
+      /* Sparkles + dust along the stroke */
+      for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        const u = (now - p.born) / p.life;
+        if (u >= 1) {
+          particles.splice(i, 1);
+          continue;
+        }
+        p.x += p.vx;
+        p.y += p.vy;
+        p.vy += 0.045;
+        p.vx *= 0.985;
+        const falloff = (1 - u) * (1 - u);
+        const twinkle = 0.55 + 0.45 * Math.sin(now * 0.022 + p.spin * 3);
+        const a = falloff * twinkle;
+        const isDark = html.getAttribute('data-theme') === 'dark';
+
+        if (p.kind === 'spark') {
+          const len = (2.2 + p.r * 0.9) * (1 - u * 0.85) * twinkle;
+          ctx.save();
+          ctx.translate(p.x, p.y);
+          ctx.rotate(p.spin + now * 0.0012);
+          ctx.lineCap = 'round';
+          ctx.lineWidth = 1.1;
+          if (isDark) {
+            ctx.strokeStyle = `rgba(255,255,255,${a * 0.55})`;
+            ctx.shadowBlur = 6 * falloff;
+            ctx.shadowColor = `rgba(168,255,120,${a * 0.5})`;
+          } else {
+            ctx.strokeStyle = `rgba(40,90,45,${a * 0.45})`;
+            ctx.shadowBlur = 4 * falloff;
+            ctx.shadowColor = `rgba(120,200,100,${a * 0.35})`;
+          }
+          for (let k = 0; k < 4; k++) {
+            const ang = (k * Math.PI) / 2;
+            ctx.beginPath();
+            ctx.moveTo(Math.cos(ang) * len * 0.15, Math.sin(ang) * len * 0.15);
+            ctx.lineTo(Math.cos(ang) * len, Math.sin(ang) * len);
+            ctx.stroke();
+          }
+          ctx.restore();
+        } else {
+          const rad = p.r * (0.75 + 0.25 * twinkle);
+          if (isDark) {
+            ctx.fillStyle = `rgba(200,255,175,${a * 0.35})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, rad * 1.8, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = `rgba(255,255,255,${a * 0.5})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, rad * 0.55, 0, Math.PI * 2);
+            ctx.fill();
+          } else {
+            ctx.fillStyle = `rgba(100,160,85,${a * 0.22})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, rad * 1.6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = `rgba(20,28,22,${a * 0.38})`;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, rad * 0.5, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+      }
+      ctx.shadowBlur = 0;
 
       for (let i = strokes.length - 1; i >= 0; i--) {
-        const s   = strokes[i];
-        const age = now - s.born;
-        if (age > FADE_MS + 400) { strokes.splice(i, 1); continue; }
+        const s = strokes[i];
+        const alpha = strokeAlpha(s, now);
+        if (s.endedAt && alpha < 0.003) {
+          strokes.splice(i, 1);
+          continue;
+        }
+        if (alpha < 0.008 || s.pts.length < 2) continue;
 
-        const t     = Math.max(0, 1 - age / FADE_MS);
-        const alpha = Math.pow(t, 1.3) * 0.88;
-        if (alpha < 0.01 || s.pts.length < 2) continue;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
 
-        ctx.lineWidth  = 3.5;
-        ctx.lineCap    = 'round';
-        ctx.lineJoin   = 'round';
+        const active = !s.endedAt;
+        const softBlur = active ? 5 + 2.5 * pulse : 0;
 
         if (s.dark) {
-          ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
-          ctx.shadowBlur  = 16;
-          ctx.shadowColor = `rgba(255,255,255,${alpha * 0.40})`;
+          ctx.strokeStyle = `rgba(255,255,255,${alpha * 0.88})`;
+          ctx.lineWidth = 2;
+          ctx.shadowBlur = softBlur;
+          ctx.shadowColor = `rgba(255,255,255,${alpha * 0.14})`;
         } else {
-          ctx.strokeStyle = `rgba(12,12,12,${alpha * 0.72})`;
-          ctx.shadowBlur  = 0;
+          ctx.strokeStyle = `rgba(15,14,13,${alpha * 0.72})`;
+          ctx.lineWidth = 2;
+          ctx.shadowBlur = softBlur;
+          ctx.shadowColor = `rgba(15,14,13,${alpha * 0.1})`;
         }
 
-        /* Smooth bezier through midpoints */
-        ctx.beginPath();
-        ctx.moveTo(s.pts[0].x, s.pts[0].y);
-        for (let j = 1; j < s.pts.length - 1; j++) {
-          const mx2 = (s.pts[j].x + s.pts[j + 1].x) * 0.5;
-          const my2 = (s.pts[j].y + s.pts[j + 1].y) * 0.5;
-          ctx.quadraticCurveTo(s.pts[j].x, s.pts[j].y, mx2, my2);
-        }
-        ctx.lineTo(s.pts.at(-1).x, s.pts.at(-1).y);
+        drawStrokePath(s);
         ctx.stroke();
       }
 

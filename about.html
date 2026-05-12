@@ -178,10 +178,16 @@
 
     /* ── Responsive ──────────────────────────────────── */
     @media (max-width: 680px) {
-      #top-bar { padding: 18px 20px; }
+      #top-bar { padding: 18px 54px 18px 20px; }
       .top-nav { display: none; }
       .top-right .theme-btn, .ctrl-sep { display: none; }
-      .mob-btn { display: flex !important; }
+      .mob-btn {
+        display: flex !important;
+        position: fixed;
+        top: 18px;
+        right: 16px;
+        z-index: 120;
+      }
       .about-page { padding: 60px 20px 80px; }
       .bio-title { font-size: clamp(1.8rem, 7vw, 2.8rem); }
       .tl-item { grid-template-columns: 56px 1fr; gap: 0 14px; }
