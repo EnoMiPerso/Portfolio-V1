@@ -1,0 +1,2087 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark" data-default-project="6">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>File management system — Work — Enora Minot</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Syne', sans-serif; cursor: none; overflow: hidden; height: 100dvh; background: var(--bg); transition: background .4s; }
+
+    :root {
+      --bg:     #0c0b10;
+      --fg:     #ffffff;
+      --fg-dim: rgba(255,255,255,.55);
+      --fg-mute:rgba(255,255,255,.25);
+      --accent: #a8ff78;
+      --border: rgba(255,255,255,.14);
+      --border-hover: rgba(255,255,255,.38);
+    }
+    [data-theme="light"] {
+      --bg:     #f0ede8;
+      --fg:     #0f0e0d;
+      --fg-dim: rgba(15,14,13,.55);
+      --fg-mute:rgba(15,14,13,.30);
+      --border: rgba(0,0,0,.13);
+      --border-hover: rgba(0,0,0,.32);
+    }
+
+    /* ── Cursor ──────────────────────────────────────── */
+    #cursor-dot, #cursor-ring {
+      position: fixed; top: 0; left: 0; pointer-events: none;
+      z-index: 9999; transform: translate(-50%,-50%); border-radius: 50%;
+    }
+    #cursor-dot { width: 6px; height: 6px; background: var(--fg); box-shadow: 0 0 6px rgba(255,255,255,.6); }
+    #cursor-ring { width: 34px; height: 34px; border: 1.5px solid var(--border-hover); transition: width .22s, height .22s; }
+    #cursor-ring.hovering { width: 50px; height: 50px; animation: halo 1.2s linear infinite; }
+    #cursor-ring.drag { width: 60px; height: 60px; border-width: 2px; animation: none; }
+    @keyframes halo {
+      0%,100% { border-color: hsl(0,100%,65%);   box-shadow: 0 0 14px 3px hsl(0,100%,65%); }
+      25%      { border-color: hsl(90,100%,55%);  box-shadow: 0 0 14px 3px hsl(90,100%,55%); }
+      50%      { border-color: hsl(200,100%,60%); box-shadow: 0 0 14px 3px hsl(200,100%,60%); }
+      75%      { border-color: hsl(270,100%,70%); box-shadow: 0 0 14px 3px hsl(270,100%,70%); }
+    }
+
+    /* ── Top bar ─────────────────────────────────────── */
+    #top-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 100; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; padding: 28px 40px; }
+    .top-left { display: flex; }
+    .brand { font-family: 'DM Mono', monospace; font-size: .88rem; color: var(--fg); text-decoration: none; }
+    .brand span { color: var(--accent); }
+    .top-nav { display: flex; gap: 26px; list-style: none; justify-content: center; }
+    .top-nav a { font-size: .78rem; letter-spacing: .07em; text-transform: uppercase; color: var(--fg-dim); text-decoration: none; transition: color .2s; }
+    .top-nav a:hover, .top-nav a.active { color: var(--fg); }
+    .top-nav a.active { font-weight: 600; position: relative; }
+    .top-nav a.active::after { content: ''; position: absolute; bottom: -5px; left: 0; right: 0; height: 1.5px; background: var(--fg); border-radius: 2px; }
+    .top-right { display: flex; align-items: center; justify-content: flex-end; gap: 4px; }
+    .ctrl-btn { width: 30px; height: 30px; background: transparent; border: none; cursor: none; display: flex; align-items: center; justify-content: center; color: var(--fg-dim); border-radius: 6px; transition: color .2s, background .2s; }
+    .ctrl-btn:hover, .ctrl-btn.active { color: var(--fg); background: rgba(128,128,128,.15); }
+    .ctrl-sep { width: 1px; height: 16px; background: var(--fg-mute); margin: 0 6px; }
+
+    /* ── Horizontal strip ────────────────────────────── */
+    .h-viewport { position: fixed; inset: 0; z-index: 10; display: flex; align-items: center; overflow: hidden; user-select: none; }
+    .h-track {
+      display: flex; align-items: center; gap: 2vw; padding: 0 10vw;
+      will-change: transform;
+    }
+
+    /* ── Card ────────────────────────────────────────── */
+    .h-item {
+      flex: 0 0 30vw; height: 74vh;
+      position: relative;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg);
+      overflow: hidden; cursor: none;
+      transition: border-color .4s, transform .6s cubic-bezier(.22,1,.36,1), box-shadow .4s;
+    }
+    .h-item:hover {
+      border-color: var(--border-hover);
+      transform: scale(1.022);
+      box-shadow: 0 20px 50px rgba(0,0,0,.3);
+    }
+
+    /* Image — full bleed */
+    .item-ph {
+      position: absolute; inset: 0; z-index: 0;
+      overflow: hidden; pointer-events: none;
+    }
+    .item-ph img {
+      width: 100%; height: 100%; object-fit: cover; object-position: center 20%;
+      display: block;
+      filter: grayscale(100%) brightness(.6) contrast(1.1);
+      transform: scale(1.06);
+      transition: transform .7s cubic-bezier(.22,1,.36,1), filter .55s ease;
+    }
+    .h-item:hover .item-ph img {
+      transform: scale(1.0);
+      filter: grayscale(0%) brightness(1) saturate(1.05);
+    }
+    .item-ph-icon { display: none; }
+    .item-ph-text { display: none; }
+
+    /* Text zone — always frosted blur */
+    .item-body {
+      position: absolute; bottom: 0; left: 0; right: 0; z-index: 2;
+      padding: 20px 22px 26px;
+      backdrop-filter: blur(14px) brightness(.65);
+      -webkit-backdrop-filter: blur(14px) brightness(.65);
+      background: linear-gradient(to top, rgba(0,0,0,.5) 0%, transparent 100%);
+    }
+
+    /* Index number */
+    .item-num {
+      position: absolute; right: 14px; top: 14px; z-index: 3;
+      font-family: 'DM Mono', monospace; font-size: .62rem;
+      letter-spacing: .10em; color: #000;
+      pointer-events: none;
+    }
+
+    /* Tag */
+    .item-tag-corner {
+      display: block; margin-bottom: 10px;
+      font-family: 'DM Mono', monospace; font-size: .58rem;
+      letter-spacing: .12em; text-transform: uppercase;
+      color: rgba(255,255,255,.5);
+    }
+
+    .item-title {
+      font-size: clamp(1.05rem, 1.6vw, 1.45rem); font-weight: 800;
+      color: #fff; line-height: 1.1; letter-spacing: -.02em; margin: 0 0 14px;
+    }
+    .item-title em { font-style: italic; color: rgba(255,255,255,.6); }
+
+    .item-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: .72rem; font-weight: 600; color: rgba(255,255,255,.6);
+      text-decoration: none; letter-spacing: .04em;
+      opacity: 0; transform: translateY(4px);
+      transition: opacity .28s .05s, transform .28s .05s, color .2s;
+    }
+    .h-item:hover .item-link { opacity: 1; transform: translateY(0); }
+    .item-link:hover { color: #fff !important; }
+
+    /* Drag blur — applied via JS class */
+    .h-track.is-dragging .h-item {
+      filter: blur(var(--drag-blur, 0px)) brightness(var(--drag-dim, 1));
+      transition: filter .08s linear, transform .55s cubic-bezier(.22,1,.36,1), border-color .35s, box-shadow .35s;
+    }
+    .h-track.drag-released .h-item {
+      filter: blur(0px) brightness(1);
+      transition: filter .5s cubic-bezier(.22,1,.36,1), transform .55s cubic-bezier(.22,1,.36,1), border-color .35s, box-shadow .35s;
+    }
+
+    /* ── Page hint ───────────────────────────────────── */
+    .page-hint {
+      position: fixed; bottom: 60px; right: 40px; z-index: 20;
+      font-family: 'DM Mono', monospace; font-size: .64rem; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--fg); font-weight: 700;
+      transition: opacity .5s;
+    }
+    .page-hint.hidden { opacity: 0; pointer-events: none; }
+
+    /* Progress line */
+    .h-progress { position: fixed; bottom: 0; left: 0; right: 0; height: 1px; background: var(--border); z-index: 20; }
+    .h-progress-fill { height: 100%; background: var(--fg); width: 20%; transition: width .1s linear; }
+
+    /* ── Mobile nav overlay ──────────────────────────── */
+    .mob-btn { display: none; }
+    .mob-nav {
+      display: none; position: fixed; inset: 0; z-index: 300;
+      background: var(--bg); flex-direction: column;
+      align-items: center; justify-content: center; gap: 0;
+    }
+    .mob-nav.open { display: flex; }
+    .mob-nav-links { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .mob-nav-links a {
+      font-size: clamp(2rem, 9vw, 2.8rem); font-weight: 800; color: var(--fg);
+      text-decoration: none; letter-spacing: -.03em; padding: 8px 0; transition: color .2s;
+    }
+    .mob-nav-close {
+      position: absolute; top: 18px; right: 18px; background: transparent;
+      border: none; color: var(--fg); width: 40px; height: 40px;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 8px;
+    }
+    .mob-theme {
+      display: flex; gap: 4px; margin: 0 0 36px;
+      border: 1px solid var(--border); border-radius: 40px; padding: 4px;
+    }
+    .mob-theme .ctrl-btn { cursor: pointer; border-radius: 40px; padding: 8px 18px; width: auto; height: auto; color: var(--fg-mute); }
+    .mob-theme .ctrl-btn.active { background: var(--fg); color: var(--bg); }
+
+    /* ── Responsive ──────────────────────────────────── */
+    @media (max-width: 680px) {
+      #top-bar { padding: 18px 54px 18px 20px; }
+      .top-nav { display: none; }
+      .top-right .theme-btn, .ctrl-sep { display: none; }
+      .mob-btn {
+        display: flex !important;
+        position: fixed;
+        top: 18px;
+        right: 16px;
+        z-index: 120;
+      }
+      .h-item { flex: 0 0 80vw; height: 68vh; }
+      .h-track { padding: 0 5vw; gap: 4vw; }
+      .h-item::after { font-size: 110vw; }
+      .item-ph img { filter: grayscale(0%) brightness(.9) contrast(1); transform: scale(1); }
+      .item-link { opacity: 1; transform: translateX(0); }
+      .item-title { font-size: clamp(1rem, 4vw, 1.2rem); }
+      .page-hint { right: 20px; bottom: 60px; font-size: .58rem; }
+    }
+    @media (hover: none) and (pointer: coarse) {
+      #cursor-dot, #cursor-ring { display: none !important; }
+      body { cursor: auto; }
+      a, button { cursor: pointer; }
+      .h-item { cursor: pointer; }
+    }
+
+    /* ── Site footer ─────────────────────────────────── */
+    .site-footer {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 25;
+      height: 44px; padding: 0 40px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg); border-top: 1px solid var(--border);
+      font-family: 'DM Mono', monospace; font-size: .66rem;
+      color: var(--fg-mute); letter-spacing: .06em;
+      transition: background .4s, border-color .4s;
+    }
+    @media (max-width: 600px) {
+      .site-footer { padding: 0 20px; }
+    }
+
+    /* ── Case study overlay ──────────────────────────── */
+    #cs-overlay {
+      display: none;
+      position: fixed; z-index: 500;
+      background: var(--bg);
+      overflow: hidden;
+      border: none;
+    }
+    #cs-overlay.ready {
+      overflow-y: auto;
+      overflow-x: hidden;
+      scroll-behavior: smooth;
+      overscroll-behavior: contain;
+    }
+    #cs-overlay::-webkit-scrollbar { width: 4px; }
+    #cs-overlay::-webkit-scrollbar-track { background: transparent; }
+    #cs-overlay::-webkit-scrollbar-thumb { background: var(--border-hover); border-radius: 2px; }
+
+    #cs-close {
+      position: fixed; top: 28px; right: 40px; z-index: 501;
+      width: 36px; height: 36px; border-radius: 50%;
+      background: rgba(128,128,128,.15); border: 1px solid var(--border);
+      color: var(--fg); font-size: 1.1rem; cursor: none;
+      display: none; align-items: center; justify-content: center;
+      transition: background .2s;
+    }
+    #cs-close:hover { background: rgba(128,128,128,.30); }
+    #cs-close.visible { display: flex; }
+
+    .cs-inner { padding: 80px 7vw 80px; max-width: 900px; margin: 0 auto; }
+
+    /* Header chips */
+    .cs-chips {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+      margin-bottom: 20px;
+    }
+    .cs-tag-chip {
+      display: inline-block; font-family: 'DM Mono', monospace; font-size: .62rem;
+      letter-spacing: .12em; text-transform: uppercase; color: var(--fg-dim);
+      border: 1px solid var(--border); border-radius: 40px; padding: 4px 12px;
+    }
+
+    .cs-title {
+      font-size: clamp(2rem, 5vw, 4rem); font-weight: 800; color: var(--fg);
+      line-height: 1.05; letter-spacing: -.04em; margin: 0 0 28px;
+    }
+    .cs-inner:has(.cs-subtitle) .cs-title { margin-bottom: 10px; }
+    .cs-subtitle {
+      font-size: clamp(0.95rem, 1.5vw, 1.05rem); font-weight: 400; color: var(--fg-dim);
+      line-height: 1.5; max-width: 42rem; margin: 0 0 32px;
+    }
+    /* Tertiary link aligned with tag chips (e.g. after company name) */
+    .cs-chips-external {
+      flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center;
+      margin-left: 2px;
+      min-width: 34px; min-height: 34px; padding: 0 2px;
+      border: none; border-radius: 6px; background: transparent;
+      color: var(--fg-mute); text-decoration: none;
+      transition: color .15s, background .15s;
+    }
+    .cs-chips-external:hover {
+      color: var(--fg-dim);
+      background: rgba(255,255,255,.06);
+    }
+    .cs-chips-external:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 2px;
+    }
+    [data-theme="light"] .cs-chips-external:hover { background: rgba(0,0,0,.05); }
+    .cs-chips-external-icon { display: block; }
+    /* Tertiary text button after chips (e.g. product blog) */
+    .cs-chips-tertiary {
+      flex-shrink: 0; margin-left: 4px;
+      font-family: 'DM Mono', monospace; font-size: .58rem;
+      letter-spacing: .1em; text-transform: uppercase; text-decoration: none;
+      color: var(--fg-mute); border: 1px solid var(--border); border-radius: 6px;
+      padding: 6px 12px; line-height: 1.2;
+      transition: color .15s, background .15s, border-color .15s;
+    }
+    .cs-chips-tertiary:hover {
+      color: var(--fg-dim); border-color: var(--border-hover);
+      background: rgba(255,255,255,.06);
+    }
+    .cs-chips-tertiary:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 2px;
+    }
+    [data-theme="light"] .cs-chips-tertiary:hover { background: rgba(0,0,0,.05); }
+
+    .cs-title em { font-style: normal; color: transparent; -webkit-text-stroke: 2px var(--fg); }
+
+    /* Meta row — no card / dividers */
+    .cs-meta {
+      display: grid; grid-template-columns: repeat(3, 1fr);
+      gap: 24px 32px;
+      margin-bottom: 48px;
+    }
+    .cs-meta-item {
+      display: flex; flex-direction: column; gap: 4px;
+      padding: 0;
+    }
+    .cs-meta-label {
+      font-family: 'DM Mono', monospace; font-size: .56rem; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--fg);
+    }
+    .cs-meta-value { font-size: .8rem; color: var(--fg-dim); line-height: 1.65; font-weight: 400; }
+
+    /* Hero image — same width as case study column (.cs-inner) */
+    .cs-image {
+      width: 100%;
+      max-width: 100%;
+      margin-left: 0;
+      min-height: 0;
+      background: var(--bg);
+      border-radius: 0;
+      margin-bottom: 48px;
+      overflow: hidden;
+      display: block;
+    }
+    .cs-image img {
+      display: block;
+      width: 100%;
+      height: auto;
+      max-width: 100%;
+      max-height: min(85vh, 900px);
+      object-fit: contain;
+      object-position: center top;
+    }
+    .cs-image-label {
+      font-family: 'DM Mono', monospace; font-size: .62rem; letter-spacing: .14em;
+      text-transform: uppercase; color: var(--fg); display: flex;
+      align-items: center; justify-content: center;
+      min-height: 200px; width: 100%;
+    }
+
+    .cs-intro-block { margin-bottom: 44px; max-width: 680px; }
+    .cs-intro {
+      font-size: .8rem; color: var(--fg-dim); line-height: 1.65;
+      margin: 0;
+    }
+    .cs-intro > p { margin: 0 0 12px; }
+    .cs-intro > p:last-child { margin-bottom: 0; }
+    .cs-intro > ul {
+      margin: 0 0 12px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px;
+    }
+    .cs-intro > ul > li { padding-left: 14px; position: relative; }
+    .cs-intro > ul > li::before {
+      content: '–'; position: absolute; left: 0; color: var(--fg-mute);
+    }
+    .cs-intro-diagram { margin-top: 24px; }
+    .cs-intro-diagram img {
+      display: block; width: 100%; height: auto;
+      max-height: min(72vh, 640px); object-fit: contain;
+    }
+
+    /* Context rows */
+    .cs-context { margin-bottom: 28px; }
+    .cs-context-row {
+      display: grid; grid-template-columns: 130px 1fr; gap: 32px;
+      padding: 18px 0; border-top: 1px solid var(--border); align-items: start;
+    }
+    .cs-context-row:last-child { border-bottom: 1px solid var(--border); }
+    .cs-col-label {
+      font-family: 'DM Mono', monospace; font-size: .58rem; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--fg); padding-top: 3px;
+    }
+    .cs-col-text { font-size: .8rem; color: var(--fg-dim); line-height: 1.65; }
+    .cs-col-text > p { margin: 0 0 12px; }
+    .cs-col-text > p:last-child { margin-bottom: 0; }
+    .cs-col-text p.cs-description-line { margin: 0; }
+    .cs-col-text > ul {
+      margin: 0 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px;
+    }
+    .cs-col-text > ul > li { padding-left: 14px; position: relative; }
+    .cs-col-text > ul > li::before {
+      content: '–'; position: absolute; left: 0; color: var(--fg-mute);
+    }
+    .cs-col-text > ul.cs-col-plain-list > li { padding-left: 0; }
+    .cs-col-text > ul.cs-col-plain-list > li::before { content: none; }
+
+    .cs-highlights {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 2px;
+      margin-bottom: 48px; border-radius: 6px; overflow: hidden;
+    }
+    .cs-hl-card { background: var(--border); padding: 24px 20px; }
+    .cs-hl-stat {
+      font-size: clamp(1.6rem, 3vw, 2.4rem); font-weight: 800; color: var(--fg);
+      letter-spacing: -.04em; line-height: 1; margin-bottom: 6px; display: block;
+    }
+    .cs-hl-label { font-size: .8rem; color: var(--fg-dim); line-height: 1.65; }
+
+    .cs-process { margin-top: 48px; margin-bottom: 48px; }
+    .cs-process-title {
+      font-family: 'DM Mono', monospace; font-size: .72rem; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--fg); margin-bottom: 28px; display: block;
+      font-weight: 600;
+    }
+    .cs-process-steps { display: flex; flex-direction: column; gap: 0; }
+    .cs-step {
+      display: grid; grid-template-columns: 48px 1fr; align-items: baseline;
+      padding: 16px 0; border-top: 1px solid var(--border);
+    }
+    .cs-step:last-child { border-bottom: 1px solid var(--border); }
+    .cs-step-num {
+      font-family: 'DM Mono', monospace; font-size: .62rem; color: var(--fg-mute);
+      letter-spacing: .08em;
+    }
+    .cs-step-body { display: flex; flex-direction: column; gap: 4px; }
+    .cs-step-name { font-size: .8rem; font-weight: 600; color: var(--fg); line-height: 1.65; }
+    .cs-step-desc { font-size: .8rem; color: var(--fg-dim); line-height: 1.65; }
+
+    /* Design process — accordion */
+    .cs-process-group { margin-top: 48px; margin-bottom: 40px; }
+    .cs-process-group-header { padding-top: 8px; padding-bottom: 0; margin-bottom: 0; }
+    .cs-process-group-label {
+      font-family: 'DM Mono', monospace; font-size: .72rem; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--fg);
+      font-weight: 600;
+      display: block;
+      margin-bottom: 22px;
+    }
+    /* Accordion — white strokes + light text, no fill slab */
+    #cs-overlay .cs-acc-list {
+      --cs-acc-line: rgba(255, 255, 255, 0.38);
+      --cs-acc-line-strong: rgba(255, 255, 255, 0.62);
+      --cs-acc-fill: rgba(255, 255, 255, 0.06);
+      --cs-acc-fill-open: rgba(255, 255, 255, 0.1);
+      --cs-acc-rhythm: 24px;
+      background: transparent;
+      border: 1px solid var(--cs-acc-line-strong);
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: none;
+    }
+    [data-theme="light"] #cs-overlay .cs-acc-list {
+      --cs-acc-line: rgba(15, 14, 13, 0.16);
+      --cs-acc-line-strong: rgba(15, 14, 13, 0.28);
+      --cs-acc-fill: rgba(0, 0, 0, 0.04);
+      --cs-acc-fill-open: rgba(0, 0, 0, 0.07);
+    }
+    #cs-overlay .cs-acc-item { border-bottom: 1px solid var(--cs-acc-line); }
+    #cs-overlay .cs-acc-item:last-child { border-bottom: none; }
+    #cs-overlay .cs-acc-trigger {
+      width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      padding: 18px 20px;
+      font-family: 'DM Mono', monospace; font-size: .64rem; letter-spacing: .09em;
+      text-transform: uppercase; text-align: left;
+      color: var(--fg); background: transparent; border: none; cursor: pointer;
+      font-weight: 600;
+      transition: color .35s cubic-bezier(.22,1,.36,1), background .35s cubic-bezier(.22,1,.36,1);
+    }
+    #cs-overlay .cs-acc-trigger:hover {
+      color: var(--fg);
+      background: var(--cs-acc-fill);
+    }
+    #cs-overlay .cs-acc-item.is-open .cs-acc-trigger {
+      color: var(--fg);
+      background: var(--cs-acc-fill-open);
+    }
+    #cs-overlay .cs-acc-trigger:focus-visible {
+      outline: 2px solid var(--fg); outline-offset: 2px;
+    }
+    #cs-overlay .cs-acc-trigger-text { flex: 1; min-width: 0; }
+    #cs-overlay .cs-acc-chevron {
+      flex-shrink: 0; width: 9px; height: 9px;
+      border-right: 2.5px solid currentColor; border-bottom: 2.5px solid currentColor;
+      transform: rotate(45deg) translate(-2px, -2px);
+      transition: transform .5s cubic-bezier(.22,1,.36,1), border-color .25s;
+      opacity: .9;
+    }
+    #cs-overlay .cs-acc-item.is-open .cs-acc-chevron {
+      transform: rotate(-135deg) translate(-2px, -2px);
+    }
+    .cs-acc-panel {
+      display: grid;
+      grid-template-rows: 0fr;
+      transition: grid-template-rows .55s cubic-bezier(.22,1,.36,1);
+    }
+    .cs-acc-item.is-open .cs-acc-panel {
+      grid-template-rows: 1fr;
+    }
+    #cs-overlay .cs-acc-panel-inner {
+      min-height: 0;
+      overflow: hidden;
+      padding: 0 20px;
+      transition: padding-top .45s cubic-bezier(.22,1,.36,1), padding-bottom .45s cubic-bezier(.22,1,.36,1);
+      background: transparent;
+    }
+    #cs-overlay .cs-acc-item.is-open .cs-acc-panel-inner {
+      padding-top: var(--cs-acc-rhythm);
+      padding-bottom: var(--cs-acc-rhythm);
+      border-top: 1px solid var(--cs-acc-line-strong);
+    }
+    #cs-overlay .cs-acc-list .cs-section-body {
+      display: flex;
+      flex-direction: column;
+      gap: var(--cs-acc-rhythm);
+    }
+    #cs-overlay .cs-acc-list .cs-section-content {
+      font-size: .8rem;
+      font-weight: 400;
+      line-height: 1.65;
+      color: var(--fg-dim);
+      margin-bottom: 0;
+    }
+    #cs-overlay .cs-acc-list .cs-carousel {
+      margin-top: 0;
+      margin-bottom: 0;
+    }
+    #cs-overlay .cs-acc-list .cs-section-content strong {
+      color: var(--fg);
+      font-weight: 500;
+      font-size: inherit;
+    }
+    #cs-overlay .cs-acc-list .cs-section-content .cs-evolution-notes {
+      color: var(--fg-dim);
+    }
+    #cs-overlay .cs-acc-list .cs-section-content .cs-evolution-notes strong {
+      color: var(--fg-dim);
+      font-weight: 500;
+    }
+    #cs-overlay .cs-acc-list .cs-section-content em {
+      color: var(--fg-dim);
+      font-style: italic;
+      font-weight: 400;
+    }
+    #cs-overlay .cs-acc-list .cs-section-content li::before {
+      color: var(--fg-mute);
+    }
+    #cs-overlay .cs-section-content .cs-inline-figure { margin: 18px 0 0; }
+    #cs-overlay .cs-section-content .cs-inline-figure img {
+      width: 100%; height: auto; display: block; border-radius: 8px;
+      border: 1px solid var(--border); box-shadow: 0 14px 40px rgba(0, 0, 0, 0.08);
+    }
+    [data-theme="dark"] #cs-overlay .cs-section-content .cs-inline-figure img {
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.42);
+    }
+    #cs-overlay .cs-acc-list .cs-carousel-track {
+      background: var(--border);
+      border: 1px solid var(--cs-acc-line-strong);
+    }
+    #cs-overlay .cs-acc-list .cs-carousel-btn {
+      background: var(--bg);
+      border: 1px solid var(--cs-acc-line-strong);
+      color: var(--fg);
+    }
+    #cs-overlay .cs-acc-list .cs-carousel-btn:hover {
+      background: var(--fg);
+      color: var(--bg);
+      border-color: var(--fg);
+    }
+    #cs-overlay .cs-acc-list .cs-carousel-thumb {
+      outline-color: transparent;
+      opacity: .5;
+      border: 1px solid var(--cs-acc-line);
+    }
+    #cs-overlay .cs-acc-list .cs-carousel-thumb.active {
+      opacity: 1;
+      outline: 2px solid var(--cs-acc-line-strong);
+      outline-offset: 2px;
+    }
+    #cs-overlay .cs-acc-list .cs-carousel-slide img {
+      object-fit: contain;
+      object-position: center top;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cs-acc-panel,
+      .cs-acc-chevron,
+      .cs-acc-trigger,
+      .cs-acc-panel-inner {
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    .cs-section { margin-bottom: 0; }
+    .cs-section-title { display: none; }
+    .cs-section-content {
+      font-size: .8rem; font-weight: 400; color: var(--fg-dim); line-height: 1.65; margin-bottom: 14px;
+    }
+    .cs-section-content p { margin: 0 0 6px; }
+    .cs-section-content ul {
+      padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; margin: 0;
+    }
+    .cs-section-content li { padding-left: 14px; position: relative; }
+    .cs-section-content li::before {
+      content: '–'; position: absolute; left: 0; color: var(--fg-mute);
+    }
+    .cs-section-content ol {
+      margin: 6px 0 8px;
+      padding-left: 1.35rem;
+      color: var(--fg-dim);
+    }
+    .cs-section-content ol li { padding-left: 0; }
+    .cs-section-content ol li::before { content: none; }
+    .cs-section-content .cs-section-divider {
+      border: 0;
+      height: 1px;
+      margin: 14px 0 16px;
+      background: var(--border);
+    }
+    .cs-section-content .cs-section-divider--after-hmw {
+      margin: 18px 0 22px;
+    }
+    .cs-section-content p.cs-section-gap-before {
+      margin-top: 1.75rem;
+      margin-bottom: 6px;
+    }
+    .cs-section-content .cs-problem-note:first-child {
+      margin-top: 0;
+    }
+    .cs-section-content .cs-problem-note p + p {
+      margin-top: 8px;
+    }
+    .cs-section-content .cs-problem-note {
+      margin: 12px 0 0;
+      padding: 10px 12px 10px 14px;
+      border-left: 3px solid var(--fg-mute);
+      background: rgba(0, 0, 0, .05);
+      border-radius: 0 6px 6px 0;
+    }
+    [data-theme="dark"] .cs-section-content .cs-problem-note {
+      background: rgba(255, 255, 255, .06);
+    }
+    .cs-section-content .cs-problem-note-title {
+      margin: 0 0 6px;
+      font-weight: 600;
+      color: var(--fg);
+      font-size: .85rem;
+    }
+    .cs-section-content .cs-problem-note p:last-child { margin-bottom: 0; }
+
+    .cs-section-content .cs-table-wrap {
+      overflow-x: auto;
+      margin-top: 14px;
+      -webkit-overflow-scrolling: touch;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+    .cs-section-content .cs-def-table {
+      width: 100%;
+      min-width: 520px;
+      border-collapse: collapse;
+      font-size: .76rem;
+      line-height: 1.45;
+    }
+    .cs-section-content .cs-def-table caption {
+      caption-side: top;
+      text-align: left;
+      padding: 10px 12px;
+      font-weight: 600;
+      color: var(--fg);
+      border-bottom: 1px solid var(--border);
+    }
+    .cs-section-content .cs-def-table th,
+    .cs-section-content .cs-def-table td {
+      border-top: 1px solid var(--border);
+      padding: 8px 10px;
+      vertical-align: top;
+      text-align: left;
+    }
+    .cs-section-content .cs-def-table thead th {
+      border-top: 0;
+      background: rgba(0, 0, 0, .04);
+      font-weight: 600;
+      color: var(--fg);
+    }
+    [data-theme="dark"] .cs-section-content .cs-def-table thead th {
+      background: rgba(255, 255, 255, .06);
+    }
+    .cs-section-content .cs-def-table tbody th[scope="row"] {
+      font-weight: 600;
+      white-space: nowrap;
+      width: 2.75rem;
+    }
+    .cs-section-content .cs-def-impact-level {
+      margin: 0 0 6px;
+    }
+    .cs-section-content .cs-def-cell-list {
+      margin: 0;
+      padding: 0 0 0 1.1rem;
+      list-style: disc;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .cs-section-content .cs-def-cell-list li {
+      padding-left: 0;
+    }
+    .cs-section-content .cs-def-cell-list li::before {
+      content: none;
+    }
+    .cs-section-content .cs-def-muted {
+      font-weight: 400;
+      color: var(--fg-dim);
+      font-size: .92em;
+    }
+
+    .cs-carousel { margin-bottom: 8px; }
+    .cs-carousel-track {
+      position: relative; overflow: hidden; border-radius: 6px; background: var(--border);
+    }
+    .cs-carousel-slides { display: flex; transition: transform .45s cubic-bezier(.22,1,.36,1); }
+    .cs-carousel-slide { min-width: 100%; }
+    .cs-carousel-slide img {
+      width: 100%; display: block; aspect-ratio: 16/8; object-fit: cover; object-position: center top;
+      cursor: zoom-in;
+    }
+    .cs-carousel-btn {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      width: 36px; height: 36px; border-radius: 50%;
+      background: var(--bg); border: 1px solid var(--border); color: var(--fg);
+      cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2;
+      transition: background .2s;
+    }
+    .cs-carousel-btn:hover { background: var(--fg); color: var(--bg); }
+    .cs-carousel-prev { left: 12px; }
+    .cs-carousel-next { right: 12px; }
+    .cs-carousel-thumbs {
+      display: flex; gap: 6px; margin-top: 8px; overflow-x: auto;
+      padding-bottom: 4px; scrollbar-width: none;
+    }
+    .cs-carousel-thumbs::-webkit-scrollbar { display: none; }
+    .cs-carousel-thumb {
+      flex-shrink: 0; width: 72px; height: 46px; border-radius: 3px;
+      object-fit: cover; cursor: pointer; transition: opacity .2s, outline .15s;
+      outline: 2px solid transparent; outline-offset: 2px; opacity: .45;
+    }
+    .cs-carousel-thumb.active { opacity: 1; outline-color: var(--fg); }
+
+    /* Narrative carousel (before Design Process) */
+    .cs-narrative-block {
+      margin-bottom: 44px;
+      opacity: 0;
+      animation: csNarrativeIn 0.78s cubic-bezier(.22, 1, .36, 1) 0.08s forwards;
+    }
+    @keyframes csNarrativeIn {
+      from { opacity: 0; transform: translateY(18px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .cs-narrative-label {
+      font-family: 'DM Mono', monospace; font-size: .72rem; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--fg); display: block; margin-bottom: 18px;
+      font-weight: 600;
+    }
+    .cs-narrative-carousel { margin-bottom: 0; }
+    .cs-narrative-carousel .cs-carousel-track {
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 20px 56px rgba(0, 0, 0, 0.1);
+      transition: box-shadow 0.45s ease;
+    }
+    [data-theme="dark"] .cs-narrative-carousel .cs-carousel-track {
+      box-shadow: 0 22px 64px rgba(0, 0, 0, 0.55);
+    }
+    .cs-narrative-carousel .cs-carousel-slides {
+      transition: transform 0.72s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .cs-narrative-carousel .cs-carousel-slide img {
+      display: block; width: 100%; height: auto; vertical-align: middle;
+      transition: opacity 0.5s ease, filter 0.55s cubic-bezier(.22, 1, .36, 1);
+    }
+    .cs-narrative-carousel .cs-carousel-thumb {
+      transition: transform 0.35s cubic-bezier(.22, 1, .36, 1), opacity 0.3s ease, outline-color 0.2s;
+    }
+    .cs-narrative-carousel .cs-carousel-thumb.active {
+      transform: scale(1.04);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cs-narrative-block { animation: none; opacity: 1; transform: none; }
+      .cs-narrative-carousel .cs-carousel-slides { transition-duration: 0.01ms !important; }
+      .cs-narrative-carousel .cs-carousel-slide img { transition-duration: 0.01ms !important; }
+      .cs-narrative-carousel .cs-carousel-thumb { transition-duration: 0.01ms !important; }
+      .cs-narrative-carousel .cs-carousel-thumb.active { transform: none; }
+    }
+
+    /* Strong emphasis */
+    #cs-overlay .cs-col-text strong,
+    #cs-overlay .cs-description-line strong,
+    #cs-overlay .cs-intro strong,
+    #cs-overlay .cs-step-desc strong,
+    #cs-overlay .cs-skills-text strong,
+    #cs-overlay .cs-section-content strong,
+    #cs-overlay .cs-learnings-list strong,
+    #cs-overlay .cs-meta-value strong {
+      color: var(--fg);
+      font-weight: 500;
+      font-size: inherit;
+    }
+
+    /* Videos */
+    .cs-videos { margin-bottom: 40px; padding-top: 0; border-top: none; }
+    .cs-videos-label {
+      font-family: 'DM Mono', monospace; font-size: .72rem; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--fg); display: block; margin-bottom: 22px;
+      font-weight: 600;
+    }
+    .cs-videos-narrative {
+      font-size: .8rem; color: var(--fg-dim); line-height: 1.65; margin-bottom: 22px;
+    }
+    .cs-videos-narrative p { margin: 0 0 12px; }
+    .cs-videos-narrative p:last-child { margin-bottom: 0; }
+    .cs-videos-grid { display: grid; gap: 12px; align-items: start; }
+    .cs-videos-grid--cols-1 { grid-template-columns: 1fr; }
+    .cs-videos-grid--cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .cs-videos-grid--cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .cs-video-wrap { display: flex; flex-direction: column; gap: 0; min-width: 0; }
+    .cs-video-wrap video {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      height: auto;
+      border-radius: 6px;
+      display: block;
+      background: #000;
+      object-fit: contain;
+    }
+    .cs-video-caption { display: none; }
+
+    /* Learnings */
+    .cs-learnings { margin-bottom: 40px; padding-top: 0; border-top: none; }
+    .cs-learnings-label {
+      font-family: 'DM Mono', monospace; font-size: .72rem; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--fg); display: block; margin-bottom: 22px;
+      font-weight: 600;
+    }
+    .cs-learnings-list {
+      list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px;
+    }
+    .cs-learnings-list li {
+      font-size: .8rem; color: var(--fg-dim); line-height: 1.65; padding-left: 1.1em;
+      position: relative; font-weight: 400;
+    }
+    .cs-learnings-list li::before {
+      content: '-';
+      position: absolute;
+      left: 0;
+      color: var(--fg-mute);
+    }
+    .cs-learnings-list li strong { color: var(--fg); font-weight: 500; font-size: inherit; }
+
+    /* Learnings — rich blocks (optional per project) */
+    .cs-learnings-blocks { display: flex; flex-direction: column; gap: 16px; }
+    .cs-learning-block {
+      border: 1px solid var(--border); border-radius: 8px; padding: 18px 20px;
+      background: transparent;
+    }
+    .cs-learning-block-title {
+      font-family: 'DM Mono', monospace; font-size: .62rem; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--fg); margin: 0 0 12px; font-weight: 600;
+    }
+    .cs-learning-block > p:not(.cs-learning-block-title) {
+      font-size: .8rem; color: var(--fg-dim); line-height: 1.65; margin: 0 0 12px; font-weight: 400;
+    }
+    .cs-learning-block > p:not(.cs-learning-block-title):last-child { margin-bottom: 0; }
+    #cs-overlay .cs-learning-block > p:not(.cs-learning-block-title) strong { color: var(--fg); font-weight: 500; }
+    .cs-learning-block-list {
+      list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px;
+    }
+    .cs-learning-block-list li {
+      font-size: .8rem; color: var(--fg-dim); line-height: 1.65; padding-left: 1.1em;
+      position: relative; font-weight: 400;
+    }
+    .cs-learning-block-list li::before {
+      content: '-'; position: absolute; left: 0; color: var(--fg-mute);
+    }
+    #cs-overlay .cs-learning-block-list strong { color: var(--fg); font-weight: 500; font-size: inherit; }
+
+    /* Learnings — compact prose (optional per project) */
+    .cs-learnings-prose { font-size: .8rem; color: var(--fg-dim); line-height: 1.65; font-weight: 400; }
+    .cs-learnings-prose p { margin: 0 0 14px; }
+    .cs-learnings-prose p:last-child { margin-bottom: 0; }
+    #cs-overlay .cs-learnings-prose strong { color: var(--fg); font-weight: 500; }
+
+
+    /* Evaluation (optional per project — replaces learnings when set) */
+    .cs-evaluation { margin-bottom: 40px; padding-top: 0; border-top: none; }
+    .cs-evaluation-label {
+      font-family: 'DM Mono', monospace; font-size: .72rem; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--fg); display: block; margin-bottom: 22px;
+      font-weight: 600;
+    }
+    .cs-evaluation-figure { margin: 0 0 28px; }
+    .cs-evaluation-figure img {
+      display: block; width: 100%; height: auto; max-height: min(78vh, 760px);
+      object-fit: contain; border-radius: 8px;
+    }
+    .cs-evaluation-body {
+      font-size: .8rem; color: var(--fg-dim); line-height: 1.65; font-weight: 400;
+    }
+    .cs-evaluation-body .cs-evaluation-subhead {
+      font-family: 'DM Mono', monospace; font-size: .62rem; letter-spacing: .1em;
+      text-transform: uppercase; color: var(--fg); margin: 28px 0 12px; font-weight: 600;
+    }
+    .cs-evaluation-body .cs-evaluation-subhead:first-child { margin-top: 0; }
+    #cs-overlay .cs-evaluation-body strong { color: var(--fg); font-weight: 500; font-size: inherit; }
+
+    /* Skills */
+    .cs-skills { margin-bottom: 48px; padding-top: 0; border-top: none; background: transparent; }
+    .cs-skills-label {
+      font-family: 'DM Mono', monospace; font-size: .72rem; letter-spacing: .12em;
+      text-transform: uppercase; color: var(--fg); display: block; margin-bottom: 22px;
+      font-weight: 600;
+    }
+    .cs-skills-pills { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 0; }
+    .cs-skills-pill {
+      font-family: 'DM Mono', monospace; font-size: .62rem; letter-spacing: .06em;
+      text-transform: uppercase; color: var(--fg-dim);
+      border: 1px solid var(--border); border-radius: 40px; padding: 5px 13px;
+      transition: border-color .2s, color .2s;
+    }
+    .cs-skills-pill:hover { border-color: var(--fg-dim); color: var(--fg); }
+    .cs-skills-text { font-size: .8rem; color: var(--fg-dim); line-height: 1.65; }
+
+    /* Lightbox */
+    #cs-lightbox {
+      position: fixed; inset: 0; z-index: 600;
+      background: rgba(0,0,0,.92); display: none;
+      align-items: center; justify-content: center;
+      cursor: zoom-out; padding: 24px;
+    }
+    #cs-lightbox.open { display: flex; }
+    #cs-lightbox img {
+      max-width: 92vw; max-height: 90vh; border-radius: 6px;
+      object-fit: contain; box-shadow: 0 32px 80px rgba(0,0,0,.5);
+    }
+    #cs-lightbox-close {
+      position: fixed; top: 20px; right: 24px;
+      font-family: 'DM Mono', monospace; font-size: .72rem; letter-spacing: .1em;
+      text-transform: uppercase; color: rgba(255,255,255,.6);
+      background: none; border: none; cursor: pointer;
+      transition: color .2s;
+    }
+    #cs-lightbox-close:hover { color: #fff; }
+
+    @media (max-width: 700px) {
+      .cs-highlights { grid-template-columns: 1fr 1fr; }
+      .cs-meta { grid-template-columns: 1fr; }
+      .cs-context-row { grid-template-columns: 1fr; gap: 6px; }
+      .cs-videos-grid--cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+      .cs-videos-grid--cols-3 { gap: 8px; }
+    }
+    @media (max-width: 700px) {
+      .cs-inner { padding: 72px 5vw 48px; }
+      .cs-title { font-size: clamp(1.8rem, 8vw, 3rem); }
+      .cs-intro-block { margin-bottom: 32px; }
+      .cs-image { margin-bottom: 36px; }
+      .cs-meta { margin-bottom: 32px; }
+      .cs-highlights { margin-bottom: 36px; }
+      .cs-process { margin-bottom: 36px; }
+      .cs-step { grid-template-columns: 36px 1fr; padding: 14px 0; }
+      .cs-skills { margin-bottom: 36px; }
+    }
+    @media (max-width: 420px) {
+      .cs-inner { padding: 56px 4vw 40px; }
+      .cs-highlights { gap: 2px; }
+      .cs-image img { max-height: min(78vh, 720px); }
+    }
+    .cs-divider { height: 1px; background: var(--border); margin-bottom: 40px; }
+    .cs-nav {
+      display: flex; justify-content: space-between; align-items: center;
+    }
+    .cs-nav-btn {
+      font-family: 'DM Mono', monospace; font-size: .72rem; letter-spacing: .10em;
+      text-transform: uppercase; color: var(--fg-dim); background: none; border: none;
+      cursor: none; transition: color .2s; padding: 0;
+    }
+    .cs-nav-btn:hover { color: var(--fg); }
+    .cs-nav-num {
+      font-family: 'DM Mono', monospace; font-size: .68rem; color: var(--fg-mute);
+    }
+  </style>
+</head>
+<body>
+
+  <div id="cursor-dot"></div>
+  <div id="cursor-ring"></div>
+
+  <!-- Header -->
+  <header id="top-bar">
+    <div class="top-left"><a href="index.html" class="brand">Enora Minot</a></div>
+    <ul class="top-nav">
+      <li><a href="index.html">Home</a></li>
+      <li><a href="work.html" class="active">Work</a></li>
+      <li><a href="about.html">About</a></li>
+      <li><a href="contact.html">Contact</a></li>
+    </ul>
+    <div class="top-right">
+      <button class="ctrl-btn theme-btn" data-theme-val="light" aria-label="Light mode">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+      <div class="ctrl-sep"></div>
+      <button class="ctrl-btn theme-btn active" data-theme-val="dark" aria-label="Dark mode">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button class="ctrl-btn mob-btn" id="mob-open" aria-label="Open menu">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Mobile nav overlay -->
+  <div class="mob-nav" id="mob-nav">
+    <button class="mob-nav-close" id="mob-close" aria-label="Close menu">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
+    <div class="mob-theme">
+      <button class="ctrl-btn theme-btn" data-theme-val="light" aria-label="Light mode">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+      <button class="ctrl-btn theme-btn" data-theme-val="dark" aria-label="Dark mode">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+    </div>
+    <div class="mob-nav-links">
+      <a href="index.html">Home</a>
+      <a href="work.html">Work</a>
+      <a href="about.html">About</a>
+      <a href="contact.html">Contact</a>
+    </div>
+  </div>
+
+  <!-- Horizontal strip -->
+  <div class="h-viewport" id="h-viewport">
+    <div class="h-track" id="h-track">
+
+<article class="h-item" data-idx="6">
+        <div class="item-ph">
+          <span class="item-num">01 / 07</span>
+          <img src="assets/fms/file-management-system-hero.png" alt="File management system — Studio on a laptop: Last viewed card grid (lifestyle mockup)" decoding="async" fetchpriority="high">
+        </div>
+        <div class="item-body">
+          <div>
+            <span class="item-tag-corner">Design concept · Studio · 2025</span>
+            <h2 class="item-title">File <em>management system</em></h2>
+          </div>
+          <a href="#" class="item-link">View project ↗</a>
+        </div>
+      </article>
+
+      <article class="h-item" data-idx="5">
+        <div class="item-ph">
+          <span class="item-num">02 / 07</span>
+          <img src="assets/studio/studio-framework-hero.png" alt="Studio Framework — desk mockup with monitor showing Figma; Studio framework guide for designers, Supernova pages, and foundation layouts" decoding="async" loading="lazy">
+        </div>
+        <div class="item-body">
+          <div>
+            <span class="item-tag-corner">Design System · 2025</span>
+            <h2 class="item-title">Studio <em>Framework</em></h2>
+          </div>
+          <a href="#" class="item-link">View project ↗</a>
+        </div>
+      </article>
+
+      <article class="h-item" data-idx="4">
+        <div class="item-ph">
+          <span class="item-num">03 / 07</span>
+          <img src="assets/rpg/rpg-group-displacement-hero.png" alt="RoomPriceGenie pricing calculator tool — design strategy title slide with isometric pricing UI" decoding="async" loading="lazy">
+        </div>
+        <div class="item-body">
+          <div>
+            <span class="item-tag-corner">UX Strategy · 2025</span>
+            <h2 class="item-title">Pricing calculator <em>tool</em></h2>
+          </div>
+          <a href="#" class="item-link">View project ↗</a>
+        </div>
+      </article>
+
+      <article class="h-item" data-idx="3">
+        <div class="item-ph">
+          <span class="item-num">04 / 07</span>
+          <img src="assets/smart-inputs/smart-inputs-variables-hero.png" alt="Smart inputs and Variables — laptop mockup showing Celonis Studio Views visual editor with variables and dynamic content" decoding="async" loading="lazy">
+        </div>
+        <div class="item-body">
+          <div>
+            <span class="item-tag-corner">Celonis Views · Product design · 2025</span>
+            <h2 class="item-title">Smart inputs <em>&amp; Variables</em></h2>
+          </div>
+          <a href="#" class="item-link">View project ↗</a>
+        </div>
+      </article>
+
+      <article class="h-item" data-idx="2">
+        <div class="item-ph">
+          <span class="item-num">05 / 07</span>
+          <img src="assets/ai-annotations/ai-annotations-hero.png" alt="AI Annotations Builder — laptop mockup showing Annotation Builder accuracy preview in Studio" decoding="async" loading="lazy">
+        </div>
+        <div class="item-body">
+          <div>
+            <span class="item-tag-corner">AI Design · Dev Tools · 2024</span>
+            <h2 class="item-title">AI Annotations <em>Builder</em></h2>
+          </div>
+          <a href="#" class="item-link">View project ↗</a>
+        </div>
+      </article>
+
+      <article class="h-item" data-idx="1">
+        <div class="item-ph">
+          <span class="item-num">06 / 07</span>
+          <img src="assets/transformation-hub/transformation-hub-hero.png" alt="Transformation Hub — Value Report dashboard on laptop mockup" decoding="async" loading="lazy">
+        </div>
+        <div class="item-body">
+          <div>
+            <span class="item-tag-corner">Product Design · 2023</span>
+            <h2 class="item-title">Transformation <em>Hub</em></h2>
+          </div>
+          <a href="#" class="item-link">View project ↗</a>
+        </div>
+      </article>
+
+      <article class="h-item" data-idx="0">
+        <div class="item-ph">
+          <span class="item-num">07 / 07</span>
+          <img src="assets/platform/hi-fi-hero-platform-adoption.png" alt="High-fidelity admin console — Platform adoption dashboard with metrics, activity chart, and user table on a tablet" decoding="async" loading="lazy">
+        </div>
+        <div class="item-body">
+          <div>
+            <span class="item-tag-corner">Product Design · 2022</span>
+            <h2 class="item-title">Admin Console <em>&amp; Analytics</em></h2>
+          </div>
+          <a href="#" class="item-link">View project ↗</a>
+        </div>
+      </article>
+
+    </div>
+  </div>
+
+  <span class="page-hint" id="drag-hint">Drag to Explore</span>
+  <div class="h-progress"><div class="h-progress-fill" id="h-fill"></div></div>
+
+  <!-- Case study overlay (outside track to avoid transform inheritance) -->
+  <div id="cs-overlay"><div class="cs-inner" id="cs-inner"></div></div>
+  <button id="cs-close" aria-label="Close project">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+
+  <footer class="site-footer">
+    <span>© 2026 Enora Minot</span>
+  </footer>
+
+  <script>
+    /* ── Cursor ─────────────────────────────────────── */
+    const cDot = document.getElementById('cursor-dot');
+    const cRing = document.getElementById('cursor-ring');
+    let mx = -200, my = -200, rx = -200, ry = -200;
+    document.addEventListener('mousemove', e => { mx = e.clientX; my = e.clientY; });
+    (function tick() {
+      rx += (mx-rx)*0.12; ry += (my-ry)*0.12;
+      cDot.style.left = mx+'px'; cDot.style.top = my+'px';
+      cRing.style.left = rx+'px'; cRing.style.top = ry+'px';
+      requestAnimationFrame(tick);
+    })();
+    document.querySelectorAll('a,button,.h-item').forEach(el => {
+      el.addEventListener('mouseenter', () => cRing.classList.add('hovering'));
+      el.addEventListener('mouseleave', () => cRing.classList.remove('hovering'));
+    });
+
+    /* ── Theme ──────────────────────────────────────── */
+    const html = document.documentElement;
+    const saved = localStorage.getItem('theme') || 'dark';
+    html.setAttribute('data-theme', saved);
+    document.querySelectorAll('.theme-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.themeVal === saved);
+      btn.addEventListener('click', () => {
+        const v = btn.dataset.themeVal;
+        html.setAttribute('data-theme', v); localStorage.setItem('theme', v);
+        document.querySelectorAll('.theme-btn').forEach(b => b.classList.toggle('active', b.dataset.themeVal === v));
+        document.getElementById('mob-nav').classList.remove('open');
+      });
+    });
+
+    /* ── Project data ───────────────────────────────── */
+    const PROJECTS = [
+      { tag: 'Product Design · 2022', num: '07 / 07', next: 1,
+        img: 'assets/platform/hi-fi-hero-platform-adoption.png',
+        title: 'Admin Console <em>&amp; Analytics</em>',
+        company: 'Celonis', role: 'Product Designer', timeline: 'Q2 → Q3 2022', team: 'Admin & Settings',
+        intro: "The Admin Console, a key internal tool for system configuration, user and permissions management, and general settings, had usability challenges that impacted administrators' efficiency and understanding of platform usage.",
+        problem: 'Two main problems were identified: a <strong>complex UI</strong> with low <strong>discoverability</strong> of important settings in the Console, and a lack of <strong>visibility into platform usage metrics</strong> for admins and key stakeholders.',
+        approach: 'Redesigned the Admin Console to improve clarity, accessibility, and task completion time.\nIntroduced a Usage Dashboard to surface insights on platform engagement, usage trends, and account activity.',
+        result: '+30% admin satisfaction (NPS) · 70% dashboard adoption in the first quarter.',
+        skills: 'User Research · Information Architecture · Card Sorting · Heuristic Evaluation · Usability Testing · Interaction Design · Data Dashboard Design · Benchmarking',
+        videos: [
+          { src: 'assets/platform/admin-console-flow-1.mp4', label: '' },
+          { src: 'assets/platform/admin-console-flow-2.mp4', label: '' },
+        ],
+        highlights: [],
+        sections: [
+          { title: 'Research', html: '<ul><li><strong>Customer interviews</strong> (internal + external)</li><li><strong>Heuristic evaluation</strong> of the current product</li><li><strong>Benchmarking</strong> other tools (Zendesk, UiPath, Google, Adobe, etc.)</li><li><strong>Collaborative workshop</strong></li><li><strong>Crazy 8s</strong></li><li><strong>Testing visual early concepts</strong> with stakeholders</li></ul>', images: [
+            { src: 'assets/platform/research-benchmark-zendesk.png', label: 'Benchmarking — Zendesk Admin Center (Settings IA)' },
+            { src: 'assets/platform/research-benchmark-uipath-1.png', label: 'Benchmarking — UiPath Automation Cloud admin' },
+            { src: 'assets/platform/research-benchmark-uipath-2.png', label: 'Benchmarking — UiPath admin navigation and IA' },
+          ] },
+          { title: 'Information Architecture', html: '<p>Reorganized Console structure around <strong>admin mental models</strong> (<strong>Users</strong>, <strong>Workspaces</strong>, <strong>Integrations</strong>, <strong>Monitoring</strong>). Used <strong>card sorting</strong> to validate new groupings and naming conventions.</p>', images: [
+            { src: 'assets/platform/ia-miro-honeycomb.png', label: 'Information architecture — Settings IA exploration (Miro honeycomb)' },
+            { src: 'assets/platform/ia-admin-hierarchy.png', label: 'Information architecture — proposed admin settings hierarchy' },
+            { src: 'assets/platform/ia-dendrogram-results.png', label: 'Card sorting — dendrogram results' },
+            { src: 'assets/platform/ia-card-sort-cards.png', label: 'Card sorting — cards with defined terms' },
+            { src: 'assets/platform/ia-categories-heatmap.png', label: 'Card sorting — predefined categories results' },
+            { src: 'assets/platform/ia-pairings-matrix.png', label: 'Card sorting — pairings and similarity matrix' },
+            { src: 'assets/platform/ia-learnings-matrix.png', label: 'Card sorting — similarity matrix learnings' },
+          ] },
+          { title: 'Definition & Ideation', html: '<ul><li><strong>MoSCoW prioritization</strong> by user impact and feasibility</li><li>Three dashboard models (cards, tables, trend views)</li><li>Direction: <strong>clarity, control, visual hierarchy</strong></li></ul>', images: [
+            { src: 'assets/platform/def-ideation-01.png', label: 'Definition & ideation — adoption views: journey, goals, and annotated mockup' },
+            { src: 'assets/platform/def-ideation-02.png', label: 'Definition & ideation — mapping problems and interaction analysis (Miro)' },
+            { src: 'assets/platform/def-ideation-03.png', label: 'Definition & ideation — Settings IA benchmarking references' },
+            { src: 'assets/platform/def-ideation-04.png', label: 'Definition & ideation — adoption views: V1, hierarchy, content, open questions (Miro)' },
+            { src: 'assets/platform/def-ideation-05.png', label: 'Definition & ideation — data items and chart explorations (Miro)' },
+          ] },
+          { title: 'High fidelity design', html: '<ul><li>Clearer <strong>typography, spacing, and section headers</strong> aligned to the design system</li><li>Navigation grouped by <strong>admin mental models</strong></li><li><strong>Quick-access shortcuts</strong> on the Admin Center hub</li><li>New <strong>Platform Insights</strong> area: login history, studio usage, audit logs, login events</li><li><strong>Daily and weekly active users</strong>, trending usage of packages, spaces, assets</li></ul>', images: [
+            { src: 'assets/platform/hi-fi-01-notifications.png', label: 'High fidelity — Notifications (system changes & recipients)' },
+            { src: 'assets/platform/hi-fi-02-platform-insights.png', label: 'High fidelity — Platform insights, Studio usage' },
+            { src: 'assets/platform/hi-fi-03-admin-center.png', label: 'High fidelity — Admin center shortcuts' },
+            { src: 'assets/platform/hi-fi-04-people-users.png', label: 'High fidelity — People & Access control, Users' },
+            { src: 'assets/platform/hi-fi-05-adoption-login.png', label: 'High fidelity — User adoption views, login history' },
+            { src: 'assets/platform/hi-fi-06-team-license.png', label: 'High fidelity — Team license & usage' },
+            { src: 'assets/platform/hi-fi-07-adoption-studio.png', label: 'High fidelity — User adoption views, Studio usage' },
+          ] },
+        ],
+        learnings: [
+          'Always pair <strong>quantitative data</strong> (analytics) with <strong>qualitative context</strong> (interviews) for deep insights.',
+          'Designing for <strong>admins</strong> is designing for <strong>power users</strong>, clarity and control matter more than flash.',
+          '<strong>Microcopy and contextual help</strong> reduce the learning curve in complex enterprise tools.',
+        ],
+      },
+      { tag: 'Product Design · 2023', num: '06 / 07', next: 2,
+        img: 'assets/transformation-hub/transformation-hub-hero.png',
+        title: 'Transformation <em>Hub</em>',
+        company: 'Celonis', role: 'Senior Product Designer and Researcher', timeline: 'Dec 2022 → Sep 2023', team: 'Product & Engineering, and Go-to-Market',
+        subtitle: 'A centralized product for quantifying process improvement value.',
+        titleExternalUrl: 'https://www.celonis.com/blog/celonis-transformation-hub-a-centralized-location-for-quantifying-process-improvement-value',
+        titleExternalUrlAria: 'Read Celonis blog: Transformation Hub (opens in new tab)',
+        problem: '<p class="cs-description-line">Enterprises struggled to <strong>connect process work to business value</strong> in one credible view. Proof sat in <strong>decks and spreadsheets</strong>, renewals lacked a sharp ROI story, and wins did not <strong>travel across teams or regions</strong>.</p>',
+        approach: '<p class="cs-description-line"><strong>Transformation Hub</strong> is the system of record for value: shared definitions, <strong>guided estimation</strong>, and reporting both CS and executives can trust—so everyone argues from the <strong>same numbers</strong>.</p>',
+        result: '<p class="cs-description-line">Shipped in <strong>under nine months</strong>, aligned value tracking for Celonis and customers, tightened delivery–exec conversations, and kept <strong>research in the loop</strong> on roadmap and design.</p>',
+        skills: 'User Research · Product Strategy · Stakeholder Workshops · Information Architecture · Dashboard design · Usability Testing · Cross-functional collaboration',
+        highlights: [],
+        videosLabel: 'Product demo',
+        videos: [
+          { src: 'assets/transformation-hub/transformation-hub-product-demo.mp4', label: '' },
+        ],
+        sections: [
+          { title: '1. Discovery', html: '<p>Design explorations in Miro involve using the platform\u2019s collaborative whiteboard to brainstorm, sketch, and iterate on ideas visually with team members in real time, allowing rapid concept development and alignment before moving to detailed design.</p>', images: [
+            { src: 'assets/transformation-hub/th-discovery-miro-01.png', label: 'Discovery — Control Tower board, journey and process mapping' },
+            { src: 'assets/transformation-hub/th-discovery-miro-02.png', label: 'Discovery — Journey 0.0 stages and workshop artifacts' },
+            { src: 'assets/transformation-hub/th-discovery-miro-03.png', label: 'Discovery — Journey 1.0 wireframes and sustain value flows' },
+            { src: 'assets/transformation-hub/th-discovery-miro-04.png', label: 'Discovery — content exploration, IA, and synthesis' },
+            { src: 'assets/transformation-hub/th-discovery-miro-05.png', label: 'Discovery — User Test 1 Chalkmark, scope, analysis, synthesis' },
+          ] },
+          { title: '2. Concept', html: '<p>The concept and wireframes design of the Transformation Hub focused on creating an intuitive dashboard to track and visualize business value from process improvements, enabling users to manage opportunities, monitor progress, and generate reports, all structured to support diverse user roles and workflows efficiently.</p>', images: [
+            { src: 'assets/transformation-hub/th-concept-01-opportunities.png', label: 'Concept — Opportunities: centralized monitoring and value columns' },
+            { src: 'assets/transformation-hub/th-concept-03-strategy-modal.png', label: 'Concept — company strategy configuration (objectives & metrics)' },
+            { src: 'assets/transformation-hub/th-concept-04-value-report.png', label: 'Concept — Value Report: framed vs. realized drivers' },
+            { src: 'assets/transformation-hub/th-concept-05-home-dashboard.png', label: 'Concept — home dashboard: value summary, recommendations, activity' },
+          ] },
+          { title: '3. Explorations', html: '<p>The design explorations for the Transformation Hub went beyond basic wireframes, involving more evolved and detailed visualizations that tested different interaction models, workflows, and user scenarios. These explorations allowed us to experiment with complex concepts and gather richer feedback before finalizing the more structured wireframes.</p>', images: [
+            { src: 'assets/transformation-hub/th-explorations-01-opportunity-tracker.png', label: 'Explorations — Opportunity tracker and opportunities list' },
+            { src: 'assets/transformation-hub/th-explorations-02-opportunity-detail.png', label: 'Explorations — opportunity detail: framed vs. realized value and KPIs' },
+            { src: 'assets/transformation-hub/th-explorations-03-value-formula.png', label: 'Explorations — value realization formula and variable scoping' },
+            { src: 'assets/transformation-hub/th-explorations-04-preview-launch.png', label: 'Explorations — preview before launch and value realization KPIs' },
+            { src: 'assets/transformation-hub/th-explorations-05-add-framed-value.png', label: 'Explorations — add framed value and opportunity status' },
+          ] },
+          { title: '4. Testing stories & hypotheses', html: `<p>Workflow agreed, we made each step <strong>falsifiable</strong>: one story, explicit hypotheses, and a <strong>confidence</strong> tag (high / medium / low) so VE, CS, and research argued from the <strong>same slide</strong>, not three versions of the truth.</p>
+<p><strong>Opportunity creation</strong> — Does <strong>process → type → objective</strong> match how VEs log work? Do lean required fields plus <strong>add &amp; complete later</strong> stop half-baked drafts when numbers are still missing?</p>
+<p><strong>Frame value</strong> — Split framing from first save, allow <strong>mid-flow saves</strong>, and pin a <strong>source link</strong> so value claims stay traceable.</p>
+<p><strong>Define VR formula</strong> — Quiet KM/KPI entry for experts; formula in plain language; monitored KPIs visible; pickers constrained to validated measures.</p>
+<p><strong>Track value</strong> — Tested explicit <strong>go live</strong> as the control point and a <strong>CTA beside the formula</strong> so “start measuring” reads intentional, not accidental.</p>
+<p><strong>Report value</strong> — Stress-tested lifecycle language (backlog → completed) against how teams actually talk, and whether <strong>readiness</strong> cues sharpen triage.</p>
+<p><strong>Stop tracking</strong> — Open risks: realized value overshooting framed targets; whether <strong>completed → live</strong> is a real edge case worth supporting.</p>
+`, images: [
+            { src: 'assets/transformation-hub/th-testing-03.png', label: 'Testing slide 03 — Opportunity creation: story, hypotheses, UI' },
+            { src: 'assets/transformation-hub/th-testing-04.png', label: 'Testing slide 04 — Frame value: framing, modularity, traceability' },
+            { src: 'assets/transformation-hub/th-testing-05.png', label: 'Testing slide 05 — Define VR formula: select Knowledge Model' },
+            { src: 'assets/transformation-hub/th-testing-06.png', label: 'Testing slide 06 — Define VR formula: refine formula & KPI monitoring' },
+            { src: 'assets/transformation-hub/th-testing-07.png', label: 'Testing slide 07 — Track value: backlog, formula card, go live' },
+            { src: 'assets/transformation-hub/th-testing-08.png', label: 'Testing slide 08 — Report value: tracker, statuses, progress' },
+            { src: 'assets/transformation-hub/th-testing-09.png', label: 'Testing slide 09 — Stop tracking: completed, open questions' },
+          ] },
+          { title: '5. High Fidelity designs', html: '<p>After validating our hypotheses and user stories through user testing, we progressed to creating high-fidelity mockups (detailed, polished designs that closely represent the final product) ready for development and further stakeholder review.</p>', images: [
+            { src: 'assets/transformation-hub/th-hifi-01-create-process.png', label: 'High fidelity — Create opportunity: process selection' },
+            { src: 'assets/transformation-hub/th-hifi-02-create-form.png', label: 'High fidelity — Create opportunity: process, objective, name' },
+            { src: 'assets/transformation-hub/th-hifi-03-opportunities-list.png', label: 'High fidelity — Opportunities list with confirmation' },
+            { src: 'assets/transformation-hub/th-hifi-04-opportunity-draft.png', label: 'High fidelity — Opportunity detail (draft): readiness and value cards' },
+            { src: 'assets/transformation-hub/th-hifi-05-opportunity-ready.png', label: 'High fidelity — Opportunity detail: ready to start tracking' },
+            { src: 'assets/transformation-hub/th-hifi-06-go-live-modal.png', label: 'High fidelity — Go live: value tracking confirmation' },
+            { src: 'assets/transformation-hub/th-hifi-07-value-tracking-setup.png', label: 'High fidelity — Value tracking setup: formula step' },
+            { src: 'assets/transformation-hub/th-hifi-08-value-report-empty.png', label: 'High fidelity — Value Report: tracking enabled, awaiting data' },
+            { src: 'assets/transformation-hub/th-hifi-09-value-report-progress.png', label: 'High fidelity — Value Report: P&amp;L and working capital over time' },
+            { src: 'assets/transformation-hub/th-hifi-10-value-report-dashboard.png', label: 'High fidelity — Value Report: totals, charts, and opportunities table' },
+            { src: 'assets/transformation-hub/th-hifi-11-opportunity-live-detail.png', label: 'High fidelity — Live opportunity: framed vs. realized over time' },
+          ] },
+          { title: '6. Testing Usability', html: '<p>We concluded the design phase with several usability test sessions involving key users, which provided valuable insights into how the Transformation Hub performed in real-world scenarios. These sessions helped us identify usability issues, confirm the intuitiveness of workflows, and gather actionable feedback that informed final refinements, ensuring the product was both effective and user-friendly before launch.</p>', images: [
+            { src: 'assets/transformation-hub/th-usability-01-study-goals.png', label: 'Usability — Study goals' },
+            { src: 'assets/transformation-hub/th-usability-02-method.png', label: 'Usability — Method (remote moderated tests, V0.8 prototype)' },
+            { src: 'assets/transformation-hub/th-usability-03-tasks.png', label: 'Usability — Tasks and areas covered' },
+            { src: 'assets/transformation-hub/th-usability-04-evaluation.png', label: 'Usability — Evaluation criteria' },
+            { src: 'assets/transformation-hub/th-usability-05-overall-evaluation.png', label: 'Usability — Overall usability evaluation' },
+            { src: 'assets/transformation-hub/th-usability-06-results-synthesis.png', label: 'Usability — Results synthesis' },
+            { src: 'assets/transformation-hub/th-usability-07-quick-wins.png', label: 'Usability — Recommended next steps and quick wins' },
+            { src: 'assets/transformation-hub/th-usability-08-features-requested.png', label: 'Usability — Features requested (prioritized)' },
+          ] },
+        ],
+        learningsHtml: '<div class="cs-learnings-blocks"><div class="cs-learning-block"><p class="cs-learning-block-title">What went well</p><ul class="cs-learning-block-list"><li><strong>Close collaboration with stakeholders</strong> kept goals and priorities aligned.</li><li><strong>Iterative usability testing</strong> uncovered insights that improved navigation and clarity in value estimation.</li><li><strong>Contextual guidance and examples</strong> helped users overcome challenges quantifying impact.</li></ul></div><div class="cs-learning-block"><p class="cs-learning-block-title">What did not work as expected</p><ul class="cs-learning-block-list"><li>Early <strong>complex data visualizations</strong> overwhelmed some users; <strong>simplifying those views</strong> improved usability.</li><li>Early workflows <strong>lacked flexibility</strong> for different organizational structures; we addressed this with <strong>customizable opportunity fields and filters</strong>.</li></ul></div></div>',
+      },
+      { tag: 'AI Design · Dev Tools · 2024', num: '05 / 07', next: 3,
+        img: 'assets/ai-annotations/ai-annotations-hero.png',
+        title: 'AI Annotations <em>Builder</em>',
+        company: 'Celonis', role: 'Senior Product Designer', timeline: 'Q1 2024', team: 'Celonis AI Squad',
+        titleExternalUrl: 'https://www.celonis.com/blog/introducing-the-celonis-ai-annotation-builder-unlocking-the-power-of-your-data-with-ai',
+        titleExternalUrlAria: 'Read Celonis blog: AI Annotation Builder (opens in new tab)',
+        approachLabel: 'Use case focus',
+        resultLabel: 'Success metrics',
+        subtitle: 'A product to empower developers to easily configure, schedule, and monitor algorithms for AI annotations to use on applications.',
+        problem: '<p>Developers using Celonis Studio lacked a streamlined, centralised mechanism to <strong>integrate</strong>, <strong>manage</strong>, and <strong>observe</strong> AI annotation processes within their applications. That often meant manual configuration, disparate scheduling solutions.</p>',
+        approach: '<p><strong>First candidate: Duplicate Checker</strong></p><p>The initial implementation prioritised the <strong>Duplicate Checker</strong> use case: configuration supports defining <strong>rules and models</strong> for identifying duplicate records in an application dataset. <strong>Monitoring</strong> surfaces how effective duplicate detection is and the <strong>volume of records</strong> processed.</p>',
+        result: '<ul class="cs-col-plain-list"><li><strong>Reduced integration time:</strong> less time to integrate a new AI annotation use case (for example ~50% reduction for Duplicate Checker).</li><li><strong>Increased annotation coverage:</strong> higher share of relevant application data actively annotated.</li><li><strong>Improved visibility:</strong> clearer status and performance of annotation jobs.</li><li><strong>Reduced operational overhead:</strong> less manual work for scheduling and monitoring.</li><li><strong>Positive developer feedback:</strong> strong satisfaction on ease of use and functionality.</li></ul>',
+        skills: 'Product Design · Information Architecture · Interaction Design · Wireframing · Visual Design · Complex setup interface · Prototyping · Usability Testing · Workshop Facilitation · Cross-functional Collaboration',
+        videosLabel: 'Product demo',
+        videos: [
+          { src: 'assets/ai-annotations/ai-annotations-product-demo-01.mp4', label: '' },
+          { src: 'assets/ai-annotations/ai-annotations-product-demo-02.mp4', label: '' },
+          { src: 'assets/ai-annotations/ai-annotations-product-demo-03.mp4', label: '' },
+        ],
+        highlights: [],
+        processGroupLabel: 'Design process',
+        sections: [
+          { title: 'Bridging Context and Technicality', html: '<p>The work started by pairing <strong>user context</strong> with the <strong>technical landscape</strong>.</p><p><strong>Contextual immersion</strong> combined stakeholder interviews with workflow analysis: how developers already configure services, where monitoring breaks down, and how AI annotations are triggered today (and what happens when they fail).</p><p><strong>Technical deep dive</strong> ran in parallel: capabilities and limits of annotation services, data flows into apps, scheduling and observability patterns, and the APIs downstream features rely on. For <strong>Duplicate Checker</strong>, that meant the data involved, detection approaches, and how results land in the app—not just what is possible, but what stays <strong>performant</strong> under real constraints.</p>', images: [
+            { src: 'assets/ai-annotations/ai-annotations-ecosystem-today.png', label: 'Ecosystem map — today: AI annotations in context with ML Workbench, Objects, operational apps, and personas' },
+            { src: 'assets/ai-annotations/ai-annotations-ecosystem-tomorrow.png', label: 'Ecosystem map — tomorrow: proposed flow for creating, configuring, and storing AI annotation signals' },
+            { src: 'assets/ai-annotations/ai-annotations-data-model-duplicate-checker.png', label: 'Data model — where annotation-related results sit (e.g. CheckedInvoice, DuplicateGroup, VendorInvoice)' },
+            { src: 'assets/ai-annotations/ai-annotations-ecosystem-ml-flow.png', label: 'Technical flow — data, ML workbench, AI Annotations UI, object and events, operational apps, and marketplace' },
+            { src: 'assets/ai-annotations/ai-annotations-duplicate-checker-ui.png', label: 'Duplicate Checker in the app — action view metrics, open duplicates, and validate duplicate case tasks' },
+          ] },
+          { title: 'Ideation', html: '<p><strong>From problem to possibility</strong></p><p>The <strong>ideation phase</strong> turned insights from understanding context and technical constraints into concrete directions.</p><p><strong>Brainstorming sessions</strong></p><p>Collaborative workshops with developers, product owners, and AI/ML stakeholders surfaced many parallel ideas.</p><p><strong>Feature storming</strong></p><p>From those themes we spelled out specific capabilities: an <strong>intuitive configuration wizard</strong>, <strong>event-driven triggers</strong>, and a <strong>centralised monitoring view</strong> so setup, runs, and health stay connected.</p>', images: [
+            { src: 'assets/ai-annotations/ai-annotations-ideation-ems-screenshots.png', label: 'Ideation — EMS Studio screenshots (schedules, executions, ML signals) with Q1/Q4 roadmap notes' },
+            { src: 'assets/ai-annotations/ai-annotations-ideation-deep-apps-journey.png', label: 'FigJam — Deep Apps AI annotations: E2E journey marketplace to apps, signal configuration flow, user stories' },
+            { src: 'assets/ai-annotations/ai-annotations-ideation-board-explorations.png', label: 'Ideation board — journeys, Duplicate Checker setup, ML signal settings explorations and UI directions' },
+          ] },
+          { title: 'Sketching', html: '<p><strong>Translating ideas into layout</strong></p><p>Quick, low-fidelity frames explored UI structure, flows, and interaction patterns—prioritising <strong>speed and clarity</strong> over polish so we could stress-test concepts early (for example how a developer picks a model, defines a schedule, or reads a failed run).</p>', images: [
+            { src: 'assets/ai-annotations/ai-annotations-sketching-signals-hub.png', label: 'Sketch — Machine Learning Signals hub, card grid for signals overview' },
+            { src: 'assets/ai-annotations/ai-annotations-sketching-wireframe-logs.png', label: 'Wireframe — Signal Duplicate Material Groups, table selection, Log selected panel with failed status timeline' },
+            { src: 'assets/ai-annotations/ai-annotations-sketching-hifi-pattern-search.png', label: 'Sketch — Algorithm configuration, Pattern search expanded (columns, comparers, chips)' },
+            { src: 'assets/ai-annotations/ai-annotations-sketching-hifi-accordions.png', label: 'Sketch — Algorithm configuration tabs with Pattern search and Filters accordions' },
+          ] },
+          { title: 'User Flow Mapping', html: '<p><strong>Journeys end-to-end</strong></p><p>Flows mapped how someone moves through the proposed experience.</p><p>For <strong>Duplicate Checker</strong>, that meant from defining duplicate rules and inputs through running the signal to <strong>reviewing annotation outcomes</strong>, so we could spot gaps (for example configuration vs. run vs. logs) before build.</p>', images: [
+            { src: 'assets/ai-annotations/ai-annotations-user-flow-signal-dic-v1.png', label: 'User flow — Signal DIC V1: ready for run vs active journey (Nav → Data → ML → Signals → Signal; Parameters, Run, Logs)' },
+          ] },
+          { title: 'Wireframing', html: '<p><strong>From problem to solution space</strong></p><p>Wireframes pushed past analysis into <strong>concrete alternatives</strong>—layout, hierarchy, and copy placeholders—so we could compare directions before investing in visual polish or build.</p><p><strong>Step 1 — Creating an AI Annotation</strong></p><p>Entry from <strong>Studio</strong> (New Asset → AI Annotation), a <strong>use-case chooser</strong> including Duplicate Checker, then a <strong>stepped configuration</strong> surface (data and filters, prompt, outputs, optional actions) with clear save/continue rhythm.</p><p><strong>Step 2 — Monitoring an AI Annotation</strong></p><p>Overview dashboards for <strong>AI Annotations</strong> and the broader <strong>AI Dashboard</strong> (health charts, tasks, filters), plus a <strong>signal-level</strong> view with KPIs and accordion areas for general settings, algorithm, monitoring, and scheduling—so status stays legible next to configuration.</p>', images: [
+            { src: 'assets/ai-annotations/ai-annotations-wireframing-studio-new-asset.png', label: 'Step 1 — Studio: New Asset menu, AI Annotation under AI Tools (Beta)' },
+            { src: 'assets/ai-annotations/ai-annotations-wireframing-create-picker.png', label: 'Step 1 — Create AI Annotation: Annotation Builder, Duplicate Checker, and related use cases' },
+            { src: 'assets/ai-annotations/ai-annotations-wireframing-config-wizard.png', label: 'Step 1 — Configuration wizard: Data and filters, System prompt, Expected outputs, Take action (optional)' },
+            { src: 'assets/ai-annotations/ai-annotations-wireframing-ai-annotations-dashboard.png', label: 'Step 2 — AI Annotations overview: summary cards, charts, and annotation jobs list with Create' },
+            { src: 'assets/ai-annotations/ai-annotations-wireframing-ai-dashboard.png', label: 'Step 2 — AI Dashboard: model performance charts and My Tasks with actions' },
+            { src: 'assets/ai-annotations/ai-annotations-wireframing-predict-signal-overview.png', label: 'Step 2 — Predict Duplicate Material Groups: KPI row, status, accordions (General, Algorithm configuration, Monitoring, Scheduling)' },
+          ] },
+          { title: 'High Fidelity execution', html: '<p><strong>Near-final craft</strong></p><p>Hi-fi took validated wireframes and applied the <strong>design system</strong> in earnest: type scale, spacing, states, and component behaviour so the product felt production-ready—not just “designed.”</p><p><strong>System + components</strong></p><p>Reused patterns for <strong>buttons, fields, tabs, tables, KPI cards, and status pills</strong> kept configuration and monitoring visually consistent, cut one-off UI debt, and tightened handoff to engineering.</p><p><strong>Clarity under complexity</strong></p><p>Heavy flows (objectives as readable sentences, pattern chips, fuzzy-match controls) leaned on <strong>tooltips</strong>, clear grouping, and progressive disclosure so advanced ML options stay approachable.</p><p><strong>Monitoring you can trust</strong></p><p>Dashboards pair <strong>at-a-glance KPIs</strong> with <strong>sortable logs</strong> and explicit severity (for example INFO vs ERROR)—so health is obvious before someone opens a row.</p>', images: [
+            { src: 'assets/ai-annotations/ai-annotations-hifi-hub-table.png', label: 'Hi-fi — AI Annotations hub: KPI cards, signals table with status pills, Create' },
+            { src: 'assets/ai-annotations/ai-annotations-hifi-create-modal.png', label: 'Hi-fi — Create AI annotation modal: data model, name, model type cards, Advanced' },
+            { src: 'assets/ai-annotations/ai-annotations-hifi-material-allocation-wizard.png', label: 'Hi-fi — Material Allocation optimisation: stepped wizard, Objectives tab with sentence builder' },
+            { src: 'assets/ai-annotations/ai-annotations-hifi-duplicate-payment-search-rules.png', label: 'Hi-fi — Duplicate Payment Detector: Search rules, pattern chips (VENDOR_FUZZY), attribute comparers' },
+            { src: 'assets/ai-annotations/ai-annotations-hifi-duplicate-payment-overview.png', label: 'Hi-fi — Duplicate Payment Detector overview: usage, error rate, accuracy, MAP; General, Data, Algorithm, Logs accordions' },
+            { src: 'assets/ai-annotations/ai-annotations-hifi-duplicate-invoices-logs.png', label: 'Hi-fi — Duplicate invoices detector: Overview KPIs and execution logs with error highlighting' },
+          ] },
+        ],
+        evaluationLabel: 'Evaluation',
+        evaluationHtml: '<h3 class="cs-evaluation-subhead">Efficiency</h3><p>Primary goal: <strong>less developer time</strong> on configure, schedule, and monitor loops after the solution lands—faster first setup, fewer repetitive manual steps, and clearer signals that reduce trial-and-error debugging. Example: duplicate-checker work that once stretched across modules for <strong>hours</strong> should compress to <strong>minutes</strong> when the flow is unified.</p><h3 class="cs-evaluation-subhead">Usability (learning curve)</h3><p>We target <strong>shorter onboarding</strong> and <strong>fewer misconfigurations</strong> (errors during setup or scheduling are a proxy for whether the UI is doing the guiding). That matches a <strong>low-code / natural-language</strong> posture: rules stay readable, not only machine-runnable, so more people can automate safely.</p><h3 class="cs-evaluation-subhead">User satisfaction</h3><p><strong>CSAT</strong> and <strong>support / complaint volume</strong> are the lagging indicators that the builder is earning trust. Product success here is still <strong>actively observed</strong> as adoption grows.</p>',
+      },
+      { tag: 'Celonis Views · Product design · 2025', num: '04 / 07', next: 4,
+        img: 'assets/smart-inputs/smart-inputs-variables-hero.png',
+        title: 'Smart inputs <em>&amp; Variables</em>',
+        company: 'Celonis', role: 'Senior Product Designer', timeline: 'Q4 2024 → Q1 2025', team: 'Studio',
+        titleExternalUrl: 'https://docs.celonis.com/en/smart-inputs.html',
+        titleExternalUrlAria: 'Open Celonis documentation: Using smart inputs in Views (opens in new tab)',
+        subtitle: 'Design concept for adding dynamic content (variables, translations, javascript blocks) in Celonis Views.',
+        intro: 'Improving the user experience of the Celonis Studio Views by introducing a new feature for App builders that simplifies the use of variables and translations on the visual editor. This enhancement aims to make the usage of them easier, joyful and powerful.',
+        problemLabel: 'What?',
+        approachLabel: 'Why?',
+        resultLabel: 'Who?',
+        problem: '<p>This project focuses on introducing a <strong>new</strong> feature in the Celonis Studio (where applications are built).</p><p>This is a feature for Celonis <strong>App builders</strong>, who have extensive code knowledge, that simplifies the use of <strong>variables</strong>, <strong>translations</strong>, and <strong>javascript</strong> in the <strong>visual editor,</strong> in order to <strong>create dynamic content</strong> in <strong>dashboards.</strong></p>',
+        approach: '<p>The successful <strong>adoption</strong> of the <strong>new Studio Views</strong> depends on providing <strong>a better xp when building components</strong>, in comparison to <strong>Legacy views</strong> and <strong>Analysis</strong> where users can add dynamic values within the YAML code, but their <strong>utilization</strong> has been <strong>perceived</strong> as too <strong>hidden</strong> and <strong>advanced.</strong></p>',
+        result: '<p>An app builder who <strong>creates applications</strong> and <strong>builds dashboards</strong> using Celonis. This person is a <strong>process mining or analytics expert</strong>, familiar with <strong>JavaScript</strong>, with knowledge of <strong>SQL</strong> and <strong>YAML</strong>.</p><p>They aim to build <strong>cutting-edge applications</strong> that deliver high value to their organization, and to empower decision-makers with actionable and real-time insights.</p>',
+        skills: 'User Research · Product Design · Interaction Design · Information Architecture · Systems Thinking · UX Writing · Workshop Facilitation · Cross-functional Collaboration',
+        highlights: [],
+        videosLabel: 'Implementation',
+        videosNarrativeHtml: '<p>The implementation phase turned out to be <strong>highly complex</strong>, mainly due to technical constraints related to the <strong>Monaco Editor</strong>, which powers the variable configuration interface in Celonis Studio. While the high-fidelity designs proposed a significantly improved user experience, not all ideas could be developed as originally envisioned. The complexity of integrating intuitive UI components with a <strong>code-heavy editor</strong> environment required <strong>trade-offs</strong> and <strong>phased delivery</strong>.</p><p>As priorities shifted, I eventually <strong>handed over the project</strong> to the rest of the team in order to focus on a new initiative. Unfortunately, this meant I wasn&apos;t able to directly execute the planned <strong>usability testing</strong> for the implemented solution. However, I ensured the team had clear <strong>documentation</strong>, <strong>design rationale</strong>, and <strong>research context</strong> to carry the work forward effectively.</p>',
+        videos: [
+          { src: 'assets/smart-inputs/smart-inputs-variables-implementation-01.mov', label: '' },
+          { src: 'assets/smart-inputs/smart-inputs-variables-implementation-02.mov', label: '' },
+        ],
+        learnings: [],
+        processGroupLabel: 'Design process',
+        sections: [
+          { title: 'Understanding what is dynamic content and its complexity', html: '<p>To kick off the project, I led a <strong>user research initiative</strong> to understand how and why users of Celonis Studio were using variables when building dashboards. The goal was to uncover their motivations, typical use cases, and any pain points they experienced.</p><p>I gathered insights that helped clarify how variables support flexibility and interactivity in dashboards, as well as where users encountered confusion or limitations. These findings informed design recommendations to improve the variable experience and make dashboard creation more intuitive and efficient.</p><hr class="cs-section-divider" aria-hidden="true"><p><strong>Workshop</strong></p><p>Following the survey, I facilitated a <strong>workshop</strong> with all product managers and designers involved in Celonis Studio to share the key insights. The session focused on aligning everyone around user needs and uncovering common pain points related to variable usage.</p><p>Together, we reviewed real user quotes, behavior patterns, and identified the biggest friction areas. We then collaborated to define actionable next steps, prioritize design improvements, and align on a shared vision for enhancing the variable experience across Studio. This helped create cross-functional buy-in and momentum for addressing the issues uncovered through research.</p>', images: [
+            { src: 'assets/smart-inputs/smart-inputs-variables-s1-01-method-participants.png', label: 'Research setup — method (survey) and participant distribution' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s1-02-screening-questions.png', label: 'Background questions and screening (Qualtrics)' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s1-03-qualitative-study-goals.png', label: 'Qualitative study goals — why people use variables' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s1-04-survey-synthesis.png', label: 'Survey synthesis — how users update variables and what information matters' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s1-05-survey-responses.png', label: 'Summarized survey responses and team questions' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s1-06-workshop-board.png', label: 'Workshop — current experience, pain points, and re-imagine variables' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s1-07-workshop-solutions.png', label: 'Workshop — proposed solutions and open questions' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s1-08-business-users-survey.png', label: 'Business users — how they work with variables' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s1-09-pain-points-synthesis.png', label: 'What users find challenging about variables' },
+          ] },
+          { title: 'Where and how dynamic content is used?', html: '<p>In parallel with the user research, I conducted internal <strong>knowledge-gathering sessions</strong> with product managers, developers, and value engineers to deepen my understanding of how dynamic values and variables work from a technical and functional perspective. These conversations helped clarify the underlying logic, data dependencies, and current implementation constraints within Studio.</p><p>By bridging this technical context with user insights, I was able to identify gaps between how the system is designed to work and how users actually experience it, enabling more informed and realistic design recommendations.</p>', images: [
+            { src: 'assets/smart-inputs/smart-inputs-variables-s2-01-visual-editor.png', label: 'Studio Views — visual editor and how dynamic content appears on the canvas' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s2-02-table-settings-canvas.png', label: 'Mapping data to components — table on canvas and Settings (columns, data, translations)' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s2-03-components-panel.png', label: 'Components library — what builders drag onto the dashboard' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s2-04-dynamic-values-mockup.png', label: 'Concept — where dynamic values can plug in (content, style, labels, actions)' },
+          ] },
+          { title: 'Ideation & Concept testing with users', html: '<p>Building on the user insights and technical understanding, I conducted <strong>design explorations</strong> to address the key challenges users faced with variables and dynamic values in Celonis Studio. These explorations included rethinking how variables are created, managed, and applied within dashboards to make the experience more intuitive and flexible.</p><p>I prototyped different interaction patterns, tested layout options, and explored ways to surface logic and dependencies more clearly. The goal was to simplify complex workflows while maintaining the power and flexibility users needed, and to create solutions that aligned with both user expectations and technical feasibility.</p>', images: [
+            { src: 'assets/smart-inputs/smart-inputs-variables-s3-01-editor-modal.png', label: 'Concept — modal editor with Library and Examples for seamless code-style editing' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s3-02-tabs-variables-translations-custom.png', label: 'Explorations — Variables, Translations, and Custom (JavaScript) picker patterns' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s3-03-smart-input-picker.png', label: 'Smart input — ${} entry, recents, data model, and variable scopes in one menu' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s3-04-rich-text-dynamic-value.png', label: 'Rich text — explicit “Add dynamic value” vs inline editor overlay for expressions' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s3-05-checkbox-dynamic-entry.png', label: 'Beyond text inputs — hover affordance to set values dynamically on checkboxes' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s3-06-button-add-dynamic-picker.png', label: 'Settings — “Add dynamic value” entry point and structured picker beside the field' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s3-07-validation-errors-help.png', label: 'Validation — reference/syntax errors, filtering, and live type/value preview' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s3-08-inline-vs-editor-overlay.png', label: 'Layout — scaled inline field vs dedicated editor for longer dynamic content' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s3-09-label-field-states.png', label: 'Interaction flow — default label, dynamic mode, and typing variable syntax' },
+          ] },
+          { title: 'Testing hypothesis & stories with users', html: '<p>After the design explorations, I supported the team in writing clear <strong>user stories</strong> and <strong>hypotheses</strong> based on our research findings and design goals. This helped us align on what problems we were solving, for whom, and what success would look like.</p><p>I then organized and conducted <strong>feedback sessions</strong> with users to present our design ideas and prototypes. These sessions allowed us to validate or challenge our hypotheses, understand what resonated with users, and uncover any remaining gaps or confusion. The feedback directly informed our next iterations and ensured we were building solutions grounded in real user needs.</p>', images: [
+            { src: 'assets/smart-inputs/smart-inputs-variables-s4-01-conditional-logic-story.png', label: 'Story — conditional logic without YAML; JS block as optional setting (confidence: High)' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s4-02-inline-translations-story.png', label: 'Story — edit translations in context; hypothesis on inline value editing (confidence: High)' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s4-03-inline-create-variable.png', label: 'Story — create view variables from the picker without leaving the flow (confidence: High)' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s4-04-yaml-vs-input-hypothesis.png', label: 'Hypothesis — typing in the input vs opening YAML for variable selection (confidence: Medium)' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s4-05-library-js-suggestions.png', label: 'Hypothesis — JavaScript suggestions via Library (variables, translations, expressions, functions)' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s4-06-variable-translation-tooltips.png', label: 'Hypothesis — surfacing state (current/default values) while picking variables or translations (confidence: High)' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s4-07-component-settings-variables.png', label: 'Story — drive component settings with variables instead of the YAML editor (confidence: High)' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s4-08-floating-editor-story.png', label: 'Hypothesis — floating editor connected to the field vs YAML for longer expressions (confidence: Medium)' },
+          ] },
+          { title: 'Solution', html: '<p>Based on the validated concepts and user feedback, I moved into the <strong>high-fidelity design phase</strong> to bring the improved variable experience to life in Celonis Studio. I translated the refined ideas into detailed, production-ready UI screens that aligned with our design system and adhered to accessibility and usability best practices.</p><p>The high-fidelity designs focused on simplifying the variable creation flow, clarifying dynamic value configurations, and improving visibility into how variables impact dashboard behavior. I collaborated closely with developers to ensure technical feasibility and smooth handoff, and worked with PMs to align these designs with upcoming release plans. The goal was to deliver a polished, intuitive experience that addressed the core pain points we uncovered during research while fitting seamlessly into the broader Studio environment.</p>', images: [
+            { src: 'assets/smart-inputs/smart-inputs-variables-s5-01-solution.png', label: 'Smart input — Library categories (Variables, Translations, JS expressions, Functions)' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s5-02-solution.png', label: 'Flow — type to pick a variable, then create inline from the + control' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s5-03-solution.png', label: 'Anatomy Level 1 — data type, preview output, suggestions, and Library structure' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s5-04-solution.png', label: 'L1 default — with and without Recently used' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s5-05-solution.png', label: 'L1 while typing — filtered list, hover state, current and default value' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s5-06-solution.png', label: 'VE components — fx affordance, slots, and states across Studio controls' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s5-07-solution.png', label: 'Pattern — static control to dynamic value (example: Button type via fx)' },
+            { src: 'assets/smart-inputs/smart-inputs-variables-s5-08-solution.png', label: 'Menus & submenus — errors, tooltips, slotted values, and variable browser (L2)' },
+          ] },
+        ],
+      },
+      { tag: 'UX Strategy · 2025', num: '03 / 07', next: 5,
+        img: 'assets/rpg/rpg-group-displacement-hero.png',
+        title: 'Pricing calculator <em>tool</em>',
+        company: 'RoomPriceGenie', role: 'Lead Designer', timeline: 'Q1 2025', team: 'Product and Engineering',
+        subtitle: 'Design Strategy for the group pricing tool inside the RoomPriceGenie platform.',
+        intro: 'Lead design for RoomPriceGenie\'s group pricing workflow—strategy, interaction design, and UI so teams can read opportunity cost quickly and align before a block is signed.',
+        problem: '<p><strong>How might we help revenue teams judge whether a discounted group block is worth the transient revenue it displaces?</strong></p><p>Distribution is fast and price-transparent; group quotes still land with pressure on rate. Without a shared forecast, sales and revenue management argue from different spreadsheets, and the cost of saying yes stays fuzzy until it is too late.</p><p><strong>Goal.</strong> One place in RoomPriceGenie to compare modeled group yield with projected transient revenue for the same room-nights—so pricing a block is a decision, not a guess.</p>',
+        approach: '<p><strong>Three commitments.</strong> <strong>Clarity</strong>: surface displacement, do not bury it in footnotes. <strong>Flexibility</strong>: stress-test rate and room count without losing scenario context. <strong>Feedback</strong>: meaningful inputs refresh the comparison so the model feels credible in the room.</p><p><strong>Progressive disclosure.</strong> Capture group parameters first, then reveal comparison and guidance when the numbers can run; rate tweaks recompute in place so the workflow stays a single thread.</p>',
+        result: '<p>The experience contrasts a proposed group deal with forecast revenue from automated transient pricing for the same stay window—making it obvious whether the block helps or hurts the line you care about.</p><p>It supports accept/reject framing, quick what-if edits with immediate deltas, and hooks for historical quotations so RM and sales sign off on the same story.</p>',
+        skills: 'UX Strategy · Interaction Design · UI Development · Data Visualization · Prototyping',
+        videos: [],
+        processGroupLabel: 'Hero screens',
+        highlights: [],
+        narrativeSlides: [
+          { src: 'assets/rpg/rpg-narrative-risks-quote.png', label: 'Risks without a group displacement tool and Ralph Hitz quote on customer value' },
+          { src: 'assets/rpg/rpg-narrative-pain-points.png', label: 'Hotelier pain points without a Group Displacement Tool' },
+          { src: 'assets/rpg/rpg-narrative-requirements-wireframe.png', label: 'Product requirements and early wireframe' },
+          { src: 'assets/rpg/rpg-narrative-design-process.png', label: 'Design process — analysis, ideation, craft, and documentation' },
+          { src: 'assets/rpg/rpg-narrative-proposed-solution.png', label: 'Proposed solution — RoomPriceGenie group displacement experience' },
+        ],
+        sections: [
+          { title: 'Entry point: create new quotation', html: '<p><strong>How might users find out the entry point to create a new quotation?</strong></p><p><strong>How might users be able to access their past quotations?</strong></p><p><strong>How might users be able to see an overview of their benefits using the calculator?</strong></p><hr class="cs-section-divider cs-section-divider--after-hmw" aria-hidden="true"><p>To enhance usability and visibility, the pricing calculator tool should be accessible via a dedicated tab under &quot;Pricing Strategy&quot; in the vertical menu, or ideally as a <strong>standalone page</strong>. This page will serve as a central hub for conducting analyses and managing historical group displacement data.</p><hr class="cs-section-divider"><p><strong>Key features</strong></p><ul><li><strong>Centralised history:</strong> easy access to past quotations for retrieval and comparison.</li><li><strong>Performance overview:</strong> dashboard with key metrics (for example revenue impact).</li><li><strong>New quotation entry:</strong> streamlined process for initiating new calculations.</li><li><strong>Quick access:</strong> tabular view for navigating previous analyses.</li></ul><p class="cs-section-gap-before">This setup improves user experience and highlights the calculator\'s strategic value in revenue management.</p><figure class="cs-inline-figure"><img src="assets/rpg/rpg-entry-point-hub.png" alt="RoomPriceGenie pricing calculator tool — quotations table, search, and New quotation"></figure>', images: [] },
+          { title: 'Calculate new quotation (step 1)', html: '<p><strong>How might we display the calculator?</strong> As a page, as a modal, as a drawer?</p><p><strong>How might we provide a guided, comprehensive, fast experience</strong> to users while they\'re filling out the information and interacting with the system?</p><p><strong>How might we provide a preview of the content before saving?</strong></p><p><strong>What are the steps to calculate a new quotation?</strong></p><hr class="cs-section-divider"><p>To streamline the group displacement pricing process, the calculation flow is split into two key phases:</p><ol><li><strong>Initial data entry:</strong> users input essential information.</li><li><strong>Interactive refinement:</strong> users adjust parameters and see real-time impact.</li></ol><p>Instead of a rigid step-by-step flow, this approach prioritises speed, clarity, and responsiveness—focusing on what the user sees rather than how they navigate.</p><hr class="cs-section-divider"><p><strong>UI choice: drawer component</strong></p><p>A <strong>drawer</strong> was chosen for its flexibility:</p><ul><li><strong>Resizable</strong> and keeps the main workspace visible</li><li>Enables <strong>live previews and adjustments</strong></li><li>Consistent across creation, editing, and review</li><li>Less disruptive than modals</li></ul><p class="cs-section-gap-before">This structure supports a more efficient, user-friendly, and context-aware interaction.</p><figure class="cs-inline-figure"><img src="assets/rpg/rpg-calculate-quotation-step1.png" alt="RoomPriceGenie — Create new quotation drawer, step 1 booking details and Calculate"></figure>', images: [] },
+          { title: 'Preview new quotation calculation (step 2)', html: '<p><strong>How might we help users to understand pricing concepts better?</strong></p><p><strong>How might we show them the benefit of using this tool?</strong> The money they could gain by making an offer to a group—basically: why this is better than using Excel?</p><p><strong>How might we make understandable and visible the calculations?</strong></p><p><strong>How might users be able to overwrite the recommended price if they want to?</strong></p><p><strong>What is the best way to display the data?</strong> In a table, in charts, in an interactive calendar?</p><hr class="cs-section-divider"><p>At this stage, users focus on <strong>assessing profitability</strong> and fine-tuning the <strong>recommended group price</strong>.</p><p><strong>Key needs</strong></p><ul><li>Quickly review profit potential and booking details (dates, guests, rooms, nights, rate).</li><li>Adjust key pricing parameters like base rate offset and discount share.</li></ul><p class="cs-section-gap-before"><strong>UI approach: table-based preview</strong></p><p>A <strong>table</strong> is used as the main component to:</p><ul><li>Compare price scenarios side by side</li><li>Understand calculations at a glance</li><li>Adjust pricing inputs easily</li></ul><p class="cs-section-gap-before"><strong>Future enhancements</strong></p><ul><li>Toggle between table, charts, or calendar views via a switcher button</li><li>Dynamic visualisations for deeper insight</li></ul><p class="cs-section-gap-before"><strong>Enhanced clarity</strong></p><ul><li><strong>Info icons and tooltips</strong> provide definitions and formula examples</li><li><strong>Inline explanations</strong> clarify pricing terms within the drawer</li></ul><p class="cs-section-gap-before">This structure supports transparency, interactivity, and informed decision-making.</p><figure class="cs-inline-figure"><img src="assets/rpg/rpg-preview-quotation-step2.png" alt="RoomPriceGenie — preview new quotation: table by stay date, drawer refinement, recommended group price"></figure>', images: [] },
+          { title: 'Confirmation and Consult/edit quotation', html: '<p><strong>How might users access their past created quotations?</strong></p><p><strong>How might users update the status of their quotations once they\'ve been sent or accepted by the group?</strong></p><p><strong>What kind of information do users need to find out once their proposed price has been accepted?</strong></p><p><strong>How might we stay consistent with the previous flow?</strong></p><p><strong>What would the table experience look like on hover? On active?</strong></p><hr class="cs-section-divider"><p>At this stage, the focus is on <strong>managing quotation status</strong>, ensuring <strong>easy access to details</strong>, and delivering a <strong>clear, consistent experience</strong> across all quotation states.</p><hr class="cs-section-divider"><p><strong>Key features</strong></p><ul><li><strong>Status management:</strong> badge-style dropdowns with icons show stages such as <em>Pending</em>, <em>Approved</em>, or <em>Rejected</em>. Updates can be manual or system-driven.</li><li><strong>Quotation access:</strong> clicking the title opens a drawer for full details. <em>Pending</em> quotes stay fully interactive; <em>Approved</em> quotes switch to view-only with options to edit status or duplicate for reuse.</li></ul><hr class="cs-section-divider"><p><strong>Interaction model</strong></p><ul><li>Adjusts slightly based on status but remains consistent overall</li><li>Streamlines workflows while maintaining clarity and control</li></ul><p class="cs-section-gap-before">This design reinforces usability and transparency across the full quotation lifecycle.</p>', images: [
+            { src: 'assets/rpg/rpg-confirmation-quotations-list-success.png', label: 'Quotations table — success toast and Pending or Approved status badges' },
+            { src: 'assets/rpg/rpg-confirmation-quotation-drawer.png', label: 'Quotation drawer — Approved status, parameters, and recommended group price' },
+            { src: 'assets/rpg/rpg-confirmation-quotations-hover.png', label: 'Quotations table — row hover and status badges' },
+          ] },
+        ],
+        learnings: [
+          'Revenue tools win when they turn <strong>probability and elasticity</strong> into a clear stake; the story behind the delta matters as much as the chart.',
+          'Operators need <strong>confidence cues</strong> (freshness, scope of forecast) next to raw numbers; trust is designed, not assumed.',
+          '<strong>Progressive disclosure</strong> keeps tense workflows calm: collect the commitments you are sure about first, then unlock comparisons.',
+        ],
+      },
+      { tag: 'Design System · 2025', num: '02 / 07', next: 6,
+        img: 'assets/studio/studio-framework-hero.png',
+        title: 'Studio <em>Framework</em>',
+        company: 'Celonis', role: 'Principal Product Designer', timeline: 'Q1 → Q2 2025', team: 'Studio',
+        subtitle: 'Unified patterns for Studio assets.',
+        approachLabel: 'Context',
+        resultLabel: 'Objectives',
+        intro: '<p>Establishing unified, reusable patterns across Studio assets to accelerate user learning, enhance internal team efficiency in developing new Studio capabilities, and expedite UX decision alignment.</p>',
+        problem: '<p><strong>Quantify the problem.</strong> Without one Studio design framework, teams slowed down and shipped uneven UX. By June 2025 the catalogue already counted <strong>17 asset types</strong> (Views, automation builders, AI betas, Knowledge Models, legacy Analysis, internals, and more)—so every new capability widened pattern drift, rework, and misalignment instead of compounding on shared foundations.</p>',
+        approach: '<p>There were <strong>no established rules</strong> for building new assets in Studio—inconsistencies, user confusion, and weak cross-team alignment followed, and overall platform quality suffered.</p><p>Studio Framework targets those <strong>UX gaps</strong> with one source of truth in <strong>Figma</strong> and <strong>Supernova</strong>: clearer guidance and a higher bar for design across every Studio asset.</p>',
+        result: '<ul class="cs-col-plain-list"><li>Centralise <strong>Studio foundations</strong>—components, core flows, and layouts—in one place for reuse, discovery, and maintenance.</li><li>Raise <strong>consistency</strong>, <strong>usability</strong>, and <strong>accessibility</strong> for new-asset delivery.</li><li>Give teams <strong>structure</strong> to show how their product or feature fits the Studio ecosystem.</li><li>Publish <strong>principles</strong> and <strong>guidelines</strong> so squads align on best practice.</li></ul>',
+        skills: 'Design Systems · UI Patterns · Component Specification · Documentation · Cross-functional Collaboration · Accessibility',
+        videos: [],
+        highlights: [],
+        processGroupLabel: 'Design process',
+        sections: [
+          { title: 'Internal interviews with stakeholders', html: '<p>I ran interviews with designers, product engineers, and developers—mainly in <strong>AI</strong> and <strong>Automation</strong>—to understand how the lack of a common framework was slowing teams and where inconsistencies or missing guidance showed up across Studio assets.</p><p>Sessions used a simple <strong>who / what &amp; why / how</strong> frame on the board; we then synthesised recurring themes (contribution, architecture and technical documentation, problematic flows, guidelines, templates, ownership of in-flight work, and research handoffs) into priorities for the Studio Framework.</p>', images: [
+            { src: 'assets/studio/studio-framework-dp1-01-interviews.png', label: 'Interviews — five internal boards (Who, What & Why, How) covering AI Annotations, Crafts, Copilot, Actions / Triggers / Automations, and Insight Explorer' },
+            { src: 'assets/studio/studio-framework-dp1-02-synthesis.png', label: 'Synthesis — clustered notes on contribution, architecture, problematic features & flows, guidelines, design templates, WIP visibility, and artefacts' },
+          ] },
+          { title: 'Ideation & definition', html: '<p>I mapped an <strong>asset-agnostic lifecycle</strong> (creation through configuration, testing, iteration, publication, monitoring, and management) and captured <strong>pain points</strong> and <strong>opportunities</strong> per stage—then prioritised <strong>low-hanging fixes</strong> (publish clarity, headers and layouts, monitoring visibility) so the framework could ship value early while we tackled deeper structural work.</p><p>A <strong>card sort</strong> asked where Studio users place capabilities—<strong>package vs asset vs both</strong>—with heatmaps and clusters so navigation, top bars, and shared affordances could align with real mental models.</p><p>In parallel I ran a <strong>UI audit</strong> across major Studio assets (matrix of states such as creation, empty, headers, view, edit, test, run) and <strong>schematised flows per asset</strong>, including how <strong>view, edit, and test</strong> diverge—making inconsistencies visible and surfacing repeatable patterns the Studio Framework could standardise.</p>', images: [
+            { src: 'assets/studio/studio-framework-dp2-01-journey-low-hanging.png', label: 'Journeys & low-hanging fruit — asset-agnostic journey: user steps, pain points, and opportunities across the lifecycle' },
+            { src: 'assets/studio/studio-framework-dp2-02-ui-audit-matrix.png', label: 'UI audit matrix — the same UI states compared across Studio, View, Module, KM, Insight Explorer, Copilot, AI annotations, Action Flows, PAM, Form, and Digital process' },
+            { src: 'assets/studio/studio-framework-dp2-03-schematising-assets.png', label: 'Schematising Studio assets — screenshots paired with flow schemas for View, Action flow, Analysis, Module, PAM, Knowledge model, Skills, Copilot, and more' },
+            { src: 'assets/studio/studio-framework-dp2-04-action-flow-schema.png', label: 'Action Flow — landing, view, and edit/test UI with AF schema (package vs asset chrome, tabs, and mode-specific actions)' },
+            { src: 'assets/studio/studio-framework-dp2-05-card-sorting.png', label: 'Card sorting — package / asset / both / none, participant heatmaps, and synthesis clusters' },
+          ] },
+          { title: 'Figma library for Studio', html: '<p>The file is organised around <strong>4 content areas</strong>:</p><p class="cs-section-gap-before"><strong>1. Foundational UI components</strong></p><ul><li>Headers, form elements, tables, modals, tabs, dropdowns, icons, cards</li><li>Built with accessibility in mind—colour contrast, keyboard navigation</li><li>Linked to Supernova documentation where relevant</li></ul><p class="cs-section-gap-before"><strong>2. Reusable layout templates</strong></p><ul><li>Page structures for common asset types (editor, viewer, list, configuration pages)</li><li>Scenarios: empty state, loading, error, success</li><li>Patterns for navigation, asset headers, global vs local context</li></ul><p class="cs-section-gap-before"><strong>3. Design guidelines &amp; best practices</strong></p><ul><li>Usage rules for components and patterns</li><li>Behaviour definitions—for example how <strong>Edit</strong> vs <strong>Preview</strong> modes behave across assets</li><li>Spacing, responsiveness, and platform scaling principles</li></ul><p class="cs-section-gap-before"><strong>4. Feedback &amp; evolution zones</strong></p><div class="cs-evolution-notes"><p><strong>Current problems to solve</strong> — small UX gaps and visual inconsistencies flagged for homogenisation</p><p><strong>Flows and components to revisit</strong> — proposals for larger systemic improvements</p><p><strong>WIP recommendations</strong> — especially around complex patterns such as asset mode switching</p></div>', images: [
+            { src: 'assets/studio/studio-framework-dp3-01-get-started.png', label: 'Get started — goals, designer steps, principles, and sidebar IA (Documentation, blueprints, Space, Package)' },
+            { src: 'assets/studio/studio-framework-dp3-02-package-header.png', label: 'Package Header — Current State banner, Stickers vs Components, page list (WIP blueprints, Space, Package, Assets)' },
+            { src: 'assets/studio/studio-framework-dp3-03-asset-tree.png', label: 'Asset Tree — Stickers in context, component variants including search empty state, Ready for dev' },
+            { src: 'assets/studio/studio-framework-dp3-04-status-cards-tree-docs.png', label: 'Documentation frames — Status (shapes + accessibility), Cards (anatomy + dashboard example), Asset Tree (components + in-product example)' },
+            { src: 'assets/studio/studio-framework-dp3-05-asset-icons.png', label: 'Asset Icons — sticker grid with labels, live-in-product banner, TO DO / evolution checklist' },
+            { src: 'assets/studio/studio-framework-dp3-06-asset-status-overview.png', label: 'Asset Status page — cover, Cards / Asset Tree / Publishing layouts, and use-case strip' },
+          ] },
+          { title: 'Supernova documentation', html: '<p>The <strong>Studio Foundations</strong> section in Supernova includes:</p><p class="cs-section-gap-before"><strong>1. UI components</strong></p><ul><li>Headers, status, cards, navigation bars, tables, filters, and related patterns.</li><li>Each documented with:<ul><li>Anatomy and states (default, hover, active, disabled)</li><li>Usage guidelines and spacing rules</li><li>Do and don\u2019t examples</li><li>Code snippets or links for developer reference</li></ul></li></ul><p class="cs-section-gap-before"><strong>2. Layouts &amp; page templates</strong></p><ul><li>Templates for common Studio pages: asset lists, detail views, editors, configuration panels.</li><li>Recommendations for responsive behaviour, content density, and interaction patterns.</li></ul><p class="cs-section-gap-before"><strong>3. Interaction patterns</strong></p><ul><li>Clear UX flows for editing and saving; switching between asset modes (<strong>View</strong>, <strong>Edit</strong>, <strong>Run</strong>, <strong>Configure</strong>); managing entities or triggering automations.</li><li>Guidelines on confirmation dialogs, toasts, inline feedback, and related system responses.</li></ul><p class="cs-section-gap-before"><strong>4. Design principles &amp; naming conventions</strong></p><ul><li>Universal principles: clarity, predictability, hierarchy, flexibility.</li><li>Consistent terminology across Studio for actions, entities, and UI states.</li></ul>', images: [
+            { src: 'assets/studio/studio-framework-dp4-01-studio-framework-landing.png', label: 'Studio Framework — Supernova landing with Studio / Space / Package / Assets entry cards' },
+            { src: 'assets/studio/studio-framework-dp4-02-asset-framework-overview.png', label: 'Asset Framework — Overview with Smart Inputs spotlight and IA footer' },
+            { src: 'assets/studio/studio-framework-dp4-03-smart-inputs-getting-started.png', label: 'Smart Inputs — Getting started, designer vs engineer note, Figma and Slack links' },
+            { src: 'assets/studio/studio-framework-dp4-04-smart-inputs-examples.png', label: 'Smart Inputs — typed examples (String, Enum, Number, Date, Boolean) and error state' },
+            { src: 'assets/studio/studio-framework-dp4-05-smart-inputs-toggle.png', label: 'Inputs with toggle — fx-toggle rules, callout for always-visible toggle, annotated anatomy' },
+            { src: 'assets/studio/studio-framework-dp4-06-asset-header-intro.png', label: 'Asset header — intro, Figma link, Slack support, left / centre / right anatomy overview' },
+            { src: 'assets/studio/studio-framework-dp4-07-asset-header-anatomy.png', label: 'Asset header — Presentational / Preview diagrams with mode switcher and auto-save indicator' },
+            { src: 'assets/studio/studio-framework-dp4-08-figma-bridge-layouts.png', label: 'Figma — Stickers (view / edit / settings / full-width) and Components (headers, actions, skeleton list)' },
+          ] },
+        ],
+        learningsLabel: 'Learnings & Success story',
+        learningsHtml: '<div class="cs-learnings-prose"><p>Publishing the Studio Framework in Supernova made it a <strong>living product reference</strong>, not a passive style guide—something <strong>beautiful and usable</strong> that stays <strong>buildable, sustainable, and easy to adopt</strong> across the Studio ecosystem.</p><p>I partnered across <strong>Studio, Automation, and AI</strong> with the design system squad, engineering, and PMs on feasibility, tokens, naming, and the highest-impact inconsistencies. The Figma file doubled as our <strong>shared review surface</strong>—one place to surface gaps, test assumptions, and iterate together.</p><p><strong>Engineering</strong> was in the loop from the start: feasibility, <strong>tokens, variants, and naming</strong>, two-way feedback from shipped code back into design, and cleaner handoff on complex patterns. That replaced ad-hoc sign-off with a <strong>documented, repeatable rhythm</strong>.</p><p>Supernova gives teams <strong>one story</strong> for how Studio should look and behave—less churn for engineers, steadier best practice, faster onboarding—and keeps decisions in Figma <strong>traceable into shipped quality</strong>.</p><p>The framework file is now the <strong>default entry point</strong> for Studio designers: quicker ramp, fewer one-off screens, clearer shared standards, and a stronger <strong>distributed design culture</strong>.</p></div>',
+      },
+      { tag: 'Design concept · Studio · 2025', num: '01 / 07', next: 0,
+        img: 'assets/fms/file-management-system-hero.png',
+        title: 'File <em>management system</em>',
+        company: 'Celonis', role: 'Principal Product Designer', timeline: '2025', team: 'Studio',
+        subtitle: 'A structured file hierarchy to let developers and business users ship scalable, reusable solutions with tools in Celonis Studio.',
+        intro: '<p>In fast-paced, collaborative work, an <strong>efficient file management experience</strong> is critical. Studio users routinely work with <strong>large volumes</strong> of assets and deep, branching projects that need seamless <strong>organization</strong>, <strong>configuration</strong>, and <strong>collaboration</strong> without losing the thread.</p><p>This concept focuses on <strong>improving</strong> how people <strong>find</strong>, <strong>manage</strong>, and <strong>interact</strong> with those entities—making critical actions (<strong>create</strong>, <strong>rename</strong>, <strong>move</strong>, <strong>star</strong>, <strong>share</strong>, <strong>publish</strong>, <strong>delete</strong>) easier to reach so teams reduce friction and move faster.</p>',
+        problemLabel: 'Challenges',
+        problem: '<p><strong>Inconsistent experiences.</strong> Different parts of Studio expose different ways to work with the same entities and different capability sets. Lists, tree grids, tables, and cards diverge across the product, which slows learning and makes <strong>accessibility</strong> uneven and expensive to fix in one-off implementations.</p><p><strong>Fragmented tables and the Tree Grid.</strong> Teams ship multiple bespoke table experiences, so content management feels confusing and disconnected. Without a shared <strong>Ce-data-grid</strong> (table) foundation, platform-wide accessible behaviour is hard to guarantee and maintain. The existing Tree Grid lacks essentials for dense workflows—robust <strong>filtering</strong>, <strong>sorting</strong>, and <strong>bulk actions</strong>—and improvements in one surface rarely lift the rest, duplicating engineering effort. Users also get little <strong>customization</strong> of their views (for example columns, density, infinite scroll), so they cannot tune the grid to how they work.</p><p>On top of that, at scale <strong>navigation and hierarchy</strong> stay heavy: people still need one coherent surface to scan from spaces through assets and keep routine operations discoverable for teammates.</p>',
+        approach: '<p>We explored solutions for clearer hierarchy across <strong>spaces, packages, folders, and views</strong>, readable statuses, and quicker paths to high-frequency actions in Studio.</p>',
+        result: '<p>Clear <strong>product and design strategy</strong> and <strong>visual concept</strong> for the future of Studio.</p>',
+        skills: 'Interaction Design · Information Architecture · UI Patterns · Prototyping · Design Systems · Design Strategy · Leadership · Cross-functional Collaboration',
+        videos: [],
+        highlights: [],
+        sections: [
+          { title: 'Problematisation and prioritization', html: '<p><strong>Problems list</strong></p><div class="cs-problem-note" role="note"><p class="cs-problem-note-title">Difficulties in file organisation and confusing hierarchy</p><p>The <strong>space → package → folder → asset</strong> model often clashes with how teams picture work, so naming and nesting become the workaround instead of the hierarchy doing the work.</p></div><div class="cs-problem-note" role="note"><p class="cs-problem-note-title">Lack of batch operations</p><p>Most flows still touch <strong>one entity at a time</strong>; rename, move, star, or publish means repeating row by row, which stops scaling as libraries grow.</p></div><div class="cs-problem-note" role="note"><p class="cs-problem-note-title">Lack of customization options</p><p>The management shell feels <strong>rigid</strong>: little control over columns, density, or layout, so different roles are forced into the same narrow view.</p></div><div class="cs-problem-note" role="note"><p class="cs-problem-note-title">Unintuitive, dated UI</p><p>Cards, rail lists, and dense grids sit side by side without a shared visual or interaction language, far from a familiar, modern file system mental model.</p></div><div class="cs-problem-note" role="note"><p class="cs-problem-note-title">Inefficient search and discovery</p><p>Search exists but usage stays low next to tables and cards. Likely because findability and results do not yet beat manual scanning and naming hacks.</p></div><p class="cs-section-gap-before"><strong>Prioritization</strong></p><p>We weighted <strong>hierarchy legibility</strong>, <strong>batch operations</strong>, and <strong>shared grid behavior</strong> first because they unlock the widest slice of Studio users; <strong>search</strong>, <strong>visual polish</strong>, and <strong>personalization</strong> stay coupled to the same Ce-data-grid effort.</p>', images: [
+            { src: 'assets/fms/file-mgmt-problem-07-all-spaces-home.png', label: 'Studio home — All spaces list with manual ordering in names' },
+            { src: 'assets/fms/file-mgmt-problem-08-asset-sidebar.png', label: 'Package — asset rail with flat list, folders, and single-row actions' },
+            { src: 'assets/fms/file-mgmt-problem-02-package-suggested.png', label: 'Package — Suggested cards and All packages entry' },
+            { src: 'assets/fms/file-mgmt-problem-06-all-packages-table.png', label: 'All packages — tree grid with filters, no row selection for bulk work' },
+            { src: 'assets/fms/file-mgmt-problem-03-pattern-audit.png', label: 'Pattern audit — List, Tree Grid + Table, Card, Tree instances in Studio' },
+            { src: 'assets/fms/file-mgmt-problem-04-capability-matrix.png', label: 'Adopt and Evolve the Views Table — capability matrix (Studio vs Data vs Admin)' },
+            { src: 'assets/fms/file-mgmt-problem-05-glossary-audit.png', label: 'Ce-data-grid glossary and audit goals (internal doc)' },
+            { src: 'assets/fms/file-mgmt-problem-01-views-table-doc.png', label: 'Views table programme — excerpt from working doc' },
+          ] },
+          { title: 'Validating hypothesis', html: '<p><strong>Foundational user research</strong></p><p>Depth interviews with internal and external Studio users on how they <strong>manage entities</strong>, read <strong>status</strong>, curate <strong>packages</strong>, and run <strong>publish / version / trash</strong> flows, so we could prioritise product and grid work against real workflows.</p><p class="cs-section-gap-before"><strong>Session goals</strong></p><ul><li><strong>Confidence</strong>, perceived safety and predictability in Studio.</li><li><strong>Efficiency</strong>, what “fast” means and where time is lost.</li><li><strong>Navigation</strong>, how people find and open the right asset.</li><li><strong>Structure</strong>, how builders arrange spaces, packages, folders, and views for teammates.</li></ul><p class="cs-section-gap-before"><strong>Theme map</strong></p><ul><li><strong>Entity management</strong>, create, file, retrieve, and prune libraries without losing context.</li><li><strong>Lifecycle</strong>, duplicate, iterate, test, publish, roll back across environments.</li><li><strong>Status</strong>, whether labels and indicators explain where work sits.</li><li><strong>Publishing &amp; history</strong>, how publish doubles as save, what “changed” communicates, expectations for recovery and trash.</li></ul><p class="cs-section-gap-before"><strong>Outputs</strong></p><p>Ranked pain points, a shortlist of product bets, and <strong>design moves ready for concept tests</strong>, then iterated with moderated prototype sessions.</p><p class="cs-section-gap-before"><strong>Methods</strong></p><ul><li><strong>One-to-one interviews</strong> with builders and business consumers.</li><li><strong>Concept usability</strong> on hi-fi directions to validate or retire hypotheses before engineering.</li></ul>', images: [
+            { src: 'assets/fms/fms-research-03-needs-navigation.png', label: 'Research, user needs: project organisation and navigation' },
+            { src: 'assets/fms/fms-research-08-needs-org-structure.png', label: 'Research, spaces, processes, folders, testing areas' },
+            { src: 'assets/fms/fms-research-04-org-pain-points.png', label: 'Research, project organisation pain points' },
+            { src: 'assets/fms/fms-research-07-navigation-friction.png', label: 'Research, navigation friction on Studio home' },
+            { src: 'assets/fms/fms-research-09-package-structures.png', label: 'Research, contrasting package trees (CDW vs Avis)' },
+            { src: 'assets/fms/fms-research-02-dev-prod-implementations.png', label: 'Research, dev / prod workarounds (child KMs, test folders)' },
+            { src: 'assets/fms/fms-research-01-publishing-pain-points.png', label: 'Research, publishing workflow: status and change clarity' },
+            { src: 'assets/fms/fms-research-05-collab-publishing-needs.png', label: 'Research, collaboration and publishing needs' },
+            { src: 'assets/fms/fms-research-06-collaboration-pain-points.png', label: 'Research, collaboration pain points' },
+          ] },
+          { title: 'Defining Features', html: '<p><strong>Objective</strong></p><p>To address the challenges announced previously, we proposed a series of <strong>targeted improvements</strong> to the content management system of Studio.</p><div class="cs-table-wrap"><table class="cs-def-table"><caption>Defining features by priority</caption><thead><tr><th scope="col">Prio</th><th scope="col">Flow / component</th><th scope="col">Description of change</th><th scope="col">Impact</th></tr></thead><tbody><tr><th scope="row">P0</th><td><strong>Ce-data-grid</strong></td><td><ul class="cs-def-cell-list"><li>Search on the table and within columns</li><li>Sortable columns</li><li>Add, remove, reorder, and resize columns; freeze columns or headers</li><li>Condensed vs regular density; persist personal table layout</li><li>Inline edit and clearer surfaced metadata</li></ul></td><td><p class="cs-def-impact-level"><strong>High</strong></p><ul class="cs-def-cell-list"><li>Faster task completion</li><li>Easier to spot performance and issues</li><li>Stronger workflow efficiency</li><li>Better readability and accessibility</li></ul></td></tr><tr><th scope="row">P0</th><td><strong>Table / card switcher</strong></td><td><ul class="cs-def-cell-list"><li>Bulk actions (delete, export, and related)</li><li>Selection toolbar or compact badge bar on multi-select</li><li>Alternate views on the same dataset; expandable rows</li><li>Tooltips, overlays, side panels, or full-screen detail</li><li>Entity preview page</li></ul></td><td><p class="cs-def-impact-level"><strong>Medium</strong></p><ul class="cs-def-cell-list"><li>More control over how information is visualized</li><li>More usable across devices and touchpoints</li><li>Less cognitive load for business users scanning data</li></ul></td></tr><tr><th scope="row">P0</th><td><strong>Filters</strong> <span class="cs-def-muted">(table, cards, suggested lane; see proposal)</span></td><td><ul class="cs-def-cell-list"><li>Session restores the last custom filter set</li><li>Time: last changed, last published, creation date</li><li>By user, data model, and entity type</li></ul></td><td><p class="cs-def-impact-level"><strong>High</strong></p><ul class="cs-def-cell-list"><li>Improves usability</li><li>Speeds triage and return visits</li><li>Keeps results relevant to the task</li></ul></td></tr></tbody></table></div>', images: [] },
+          { title: 'Benchmarking the product and the market', html: '<p>Benchmarking <strong>the product</strong> and <strong>the market</strong> helped identify common patterns, user expectations, and gaps against the current Studio experience and the wider competitive landscape. By analysing how other products solve similar problems, we could:</p><ul><li><strong>Define baseline functionality</strong> users are likely to expect.</li><li><strong>Spot opportunities for differentiation</strong> by addressing unmet needs.</li><li><strong>Avoid known pitfalls</strong> by learning from the limitations of comparable tools.</li><li><strong>Gain inspiration</strong> for feature prioritisation and UX patterns.</li></ul><p>This ensures the future design decisions were informed, competitive, and aligned with real-world standards.</p>', images: [
+            { src: 'assets/fms/fms-benchmark-matrix.png', label: 'Benchmark matrix across Drive, Airtable, Finder, Notion, Power BI, Figma, and Jira' },
+            { src: 'assets/fms/fms-benchmark-enterprise-tools.png', label: 'Tools with complex asset and workflow management (Looker, Power BI, ServiceNow, Salesforce, Monday.com)' },
+            { src: 'assets/fms/fms-benchmark-dynamic-tables.png', label: 'Strong patterns for dynamic, customizable data tables (Airtable, Notion, Retool, Metabase, Sheets, Superhuman)' },
+            { src: 'assets/fms/fms-benchmark-code-ui-libraries.png', label: 'Libraries combining code and UI for dense tables (AG Grid, TanStack Table, MUI DataGrid)' },
+            { src: 'assets/fms/fms-benchmark-dev-nav-tools.png', label: 'Developer-grade navigation and previews (JetBrains, GitHub, VS Code)' },
+            { src: 'assets/fms/fms-benchmark-functionality-checklist.png', label: 'Ce-data-grid functionality checklist against market expectations' },
+          ] },
+          { title: 'Understanding User Flow', html: '<p>A key component of a <strong>file management system</strong> is to give users clear ways to <strong>list and navigate entities</strong> through complementary surfaces: <strong>breadcrumbs</strong>, the <strong>ce-data-grid</strong>, and <strong>cards</strong>.</p><p>I\'ve made this schema to map the whole picture of the different paths the users can take.</p><p class="cs-section-gap-before"><strong>Determining the principal User Stories</strong></p><ul><li>As a user, I want to see all my files in a table format so that I can easily manage them.</li><li>As a user, I want to sort files by name so that I can find them quickly.</li><li>As a user, I want to filter files by type to only see documents.</li><li>As a user, I want to be able to resize the size of the columns so that I can read better information that is important to my task.</li><li>As a user, I want to be able to change the information displayed on the table so that I can customize it to display information relevant to my task.</li><li>As a user, I want to select multiple files to perform batch actions like delete.</li></ul>', images: [
+            { src: 'assets/fms/fms-user-flow-navigation.png', label: 'Navigation schema — Home, Space, Package, and Asset paths (search, suggested lane, cards, table, breadcrumbs)' },
+          ] },
+          { title: 'Exploring design solutions', html: '<p><strong>Accelerating Findability</strong></p><ul><li>Customisable viewing option</li><li>View switching, different ways to see the same data</li><li>Previewing content</li><li>Seeing the full hierarchy</li></ul><p class="cs-section-gap-before"><strong>Facilitating Content Management</strong></p><ul><li>filtering, searching on table</li><li>sorting columns, adding and removing columns, reordering columns, resizing columns</li><li>scroll horizontally and pagination</li><li>Freezing columns and headers</li><li>give choice of display condensed and regular</li><li>the table should remember user\'s custom settings</li><li>inline editing for names</li><li>bulk actions (delete, move, etc)</li></ul>', images: [
+            { src: 'assets/fms/fms-design-solutions-01.png', label: 'Studio home: suggested table, multi select, and bulk action bar' },
+            { src: 'assets/fms/fms-design-solutions-02.png', label: 'Package: All packages table with column menu (sort, pin, filter)' },
+            { src: 'assets/fms/fms-design-solutions-03.png', label: 'Table display settings: row density, pagination, zebra stripes, and columns' },
+            { src: 'assets/fms/fms-design-solutions-04.png', label: 'Package workspace: breadcrumbs, asset rail, and main canvas shell' },
+            { src: 'assets/fms/fms-design-solutions-05.png', label: 'Studio home: advanced filters with chips and column filter affordances' },
+            { src: 'assets/fms/fms-design-solutions-06.png', label: 'Studio home: pin column (left or right), sort, and filter from header menu' },
+            { src: 'assets/fms/fms-design-solutions-07.png', label: 'Asset rail: compact list, favourites, and skeleton main area' },
+            { src: 'assets/fms/fms-design-solutions-08.png', label: 'Deep navigation: breadcrumbs, rail controls, and loading placeholders' },
+            { src: 'assets/fms/fms-design-solutions-09.png', label: 'Packages: suggested card grid with sort, filters, and view switcher' },
+            { src: 'assets/fms/fms-design-solutions-10.png', label: 'Studio home: hierarchical tree table in list view with toolbar' },
+            { src: 'assets/fms/fms-design-solutions-11.png', label: 'Studio home: nested space, package, folder, and asset rows' },
+          ] },
+          { title: 'Testing the usability of the ideas', html: '<p>I began by asking participants questions about their current experience with the product, focusing on navigation and content management. Then, I presented the mockups and gathered feedback through targeted questions to understand what resonated with them and what didn\'t.</p>', images: [
+            { src: 'assets/fms/fms-usability-miro-board.png', label: 'Usability session board — opening questions, mock walkthroughs, and current product review' },
+            { src: 'assets/fms/fms-usability-feature-feedback-matrix.png', label: 'Synthesis — filters, column customisation, card previews, and status (feedback and priority)' },
+            { src: 'assets/fms/fms-usability-design-validations-table.png', label: 'Design validations — hierarchical grid, tabs, and column controls (validation, comments, impact)' },
+          ] },
+          { title: 'Hero screens - Final proposal', html: '<p><strong>Seeing the full hierarchy on the homepage</strong></p><p>Show Space → Package → Folder → View on Studio home so people read relationships without drilling in—stronger context, fewer hops, lighter cognitive load.</p><p class="cs-section-gap-before"><strong>More meaningful columns</strong></p><ul><li>Retire <strong>Description</strong> when it adds noise.</li><li>Add <strong>Knowledge Model</strong>, <strong>Last modified</strong>, and <strong>Version</strong> for template fit, recency, and audit.</li></ul><p class="cs-section-gap-before"><strong>Density options</strong></p><p>Toggle compact layouts for power users against comfortable spacing for scanning and mixed screen sizes—same grid, personal rhythm.</p><p class="cs-section-gap-before"><strong>Row styling</strong></p><p>Optional zebra striping plus row lines so wide grids stay traceable with less fatigue.</p><p class="cs-section-gap-before"><strong>Hide and reorder columns</strong></p><p>Surface only fields that matter for a task and pin priorities left so roles can tune once, work faster.</p><p class="cs-section-gap-before"><strong>Filtering on the ce-data-grid</strong></p><p>Pair broad <strong>grid-wide filters</strong> with precise <strong>column filters</strong> so large libraries stay navigable.</p><p class="cs-section-gap-before"><strong>Bulk actions</strong></p><p>Multi-select with <strong>Move</strong>, <strong>Add to Starred</strong>, <strong>Publish</strong>, and <strong>Delete</strong> removes repetitive row-by-row work.</p><p class="cs-section-gap-before"><strong>Previewing assets (cards)</strong></p><p>Thumbnail cards for dashboards, knowledge models, and peers—recognise variants, skim metadata, and commit clicks only when needed.</p>', images: [
+            { src: 'assets/fms/fms-final-proposal-01.png', label: 'Starred — card grid with thumbnails and list/grid switcher' },
+            { src: 'assets/fms/fms-final-proposal-02.png', label: 'All spaces, meaningful columns, applied filters, bulk action bar' },
+            { src: 'assets/fms/fms-final-proposal-03.png', label: 'Starred — card hover popover with hierarchy path and metadata' },
+            { src: 'assets/fms/fms-final-proposal-04.png', label: 'All spaces — nested filter menu on entity type (grid + column scope)' },
+            { src: 'assets/fms/fms-final-proposal-05.png', label: 'All spaces — hierarchy tree, zebra rows, multi-select bulk bar' },
+            { src: 'assets/fms/fms-final-proposal-06.png', label: 'All spaces — display settings: density, zebra, lines, column visibility' },
+            { src: 'assets/fms/fms-final-proposal-07.png', label: 'All spaces — full hierarchy table with versions, status, and styling' },
+            { src: 'assets/fms/fms-final-proposal-08.png', label: 'Studio home — hierarchy table plus suggested asset cards' },
+          ] },
+          { title: 'Telemetrics', html: '<p>To evaluate user interactions with <strong>Studio</strong>\'s asset system, we focused on five areas:</p><ul><li><strong>Asset discovery</strong> — how people find assets via search, filters, or browsing, and how long it takes.</li><li><strong>Table and card interactions</strong> — filters, sorting, and (eventually) column customisation.</li><li><strong>Creation and editing</strong> — time to create or publish, inline edits, discards.</li><li><strong>Entity management</strong> — how often assets move, rename, or are deleted, and whether spaces stay organised.</li><li><strong>Workflow efficiency</strong> — duration of common flows and where friction shows up.</li></ul><p class="cs-section-gap-before"><strong>Beyond the five focus areas</strong></p><p>Supporting productivity signals include assets per session, time-to-publish, reuse rates, drop-offs in journeys, how much people customise views, and whether session length lines up with useful outcomes—together they surface efficiency, confidence, and friction across the asset lifecycle.</p><p>On top of that framing, I targeted specific tracking events on the micro journeys that matter most—getting to an asset from navigation, day-to-day management, and deletion flows—to extract actionable insight.</p><p>Finally, I reviewed what is already instrumented, mapped coverage gaps, and aligned engineers and data analysts on a plan so new components close those gaps by default.</p>', images: [
+            { src: 'assets/fms/fms-telemetry-01.png', label: 'Telemetry framing — what we want to evaluate across the asset experience' },
+            { src: 'assets/fms/fms-telemetry-02.png', label: 'Dimension — Asset Discovery & Navigation (search vs browse, entry points, time to action)' },
+            { src: 'assets/fms/fms-telemetry-03.png', label: 'Dimension — Table and card interactions (filters, sorts, density, clicks to target)' },
+            { src: 'assets/fms/fms-telemetry-04.png', label: 'Dimension — File and entity management (moves, renames, density, cleanup)' },
+            { src: 'assets/fms/fms-telemetry-05.png', label: 'Dimension — Asset creation and editing (time to create, completion, undo)' },
+            { src: 'assets/fms/fms-telemetry-06.png', label: 'Dimension — Flow efficiency (end-to-end journeys, idle time, repeats and aborts)' },
+            { src: 'assets/fms/fms-telemetry-07.png', label: 'Productivity metrics — indicators of high-efficiency usage (volume, speed, reuse, drop-off)' },
+            { src: 'assets/fms/fms-telemetry-08.png', label: 'Live tracking — Starring events by trigger, type, and role' },
+            { src: 'assets/fms/fms-telemetry-09.png', label: 'Live tracking — Recently Deleted recovery, churn, and team-level breakdown' },
+          ] },
+        ],
+        learnings: [],
+        learningsHtml: '<div class="cs-learnings-blocks"><div class="cs-learning-block"><p class="cs-learning-block-title">Principles</p><ul class="cs-learning-block-list"><li><strong>Entity hierarchy</strong> must stay legible at a glance—icons, type labels, and indentation need to work together.</li><li><strong>Density vs. scannability</strong> trade-offs show up quickly on nested tables; reserve strong colour for status and primary actions.</li><li>Anchor critical operations in <strong>predictable locations</strong> so power users can build muscle memory across spaces and packages.</li></ul></div><div class="cs-learning-block"><p class="cs-learning-block-title">What went well</p><ul class="cs-learning-block-list"><li><strong>Hierarchy view was a hit:</strong> The proposed <strong>full hierarchy</strong> (spaces → packages → assets) on the <strong>homepage</strong> earned strongly positive feedback—people could see the structure at a glance with less confusion and navigation time.</li><li><strong>List and table view preferred:</strong> Moving to a clean, scannable table resonated, especially for complex environments.</li><li><strong>Suggested and last-used entry points:</strong> Praised for helping people pick up work quickly and stay on relevant projects.</li><li><strong>Search and filter upgrades:</strong> <strong>Column-level filtering</strong> plus stronger <strong>in-table search</strong> read as meaningful wins for findability—especially once broader filters (by asset type or data model) arrive.</li><li><strong>UI clarity:</strong> Less clutter and clearer tabs (for example <strong>Starred</strong>, <strong>Most used</strong>) improved separation of content.</li><li><strong>Preview on cards:</strong> Skimming assets without opening them supported faster decisions and less friction.</li></ul></div><div class="cs-learning-block"><p class="cs-learning-block-title">Areas to improve</p><ul class="cs-learning-block-list"><li><strong>Navigation overload at scale:</strong> Large libraries felt overwhelming—similar patterns repeated across space, package, and asset levels.</li><li><strong>Contextual cues missing:</strong> Many users could not tell which hierarchy depth they were in when screens looked identical.</li><li><strong>Search and filters underused today:</strong> Existing tooling felt weak or invisible; some ignored it and relied on manual scrolling or external channels such as Slack.</li><li><strong>Card grid confusion:</strong> Hard to scan; people gravitated back to list layouts.</li><li><strong>Status too thin:</strong> Draft and published labels alone were insufficient—people wanted last modified, versioning, and clearer states.</li><li><strong>Cross-space movement:</strong> Jumping packages or spaces often meant returning home or juggling tabs.</li><li><strong>Versioning gap:</strong> Duplication as a workaround signalled a need for native versioning and better snapshot or release flows.</li></ul></div></div>',
+      },
+
+    ];
+
+    /** If set on `<html data-default-project="0">`, opens that case study on load (used by per-project template pages). */
+    const DEFAULT_OPEN_IDX = (() => {
+      const raw = document.documentElement.getAttribute('data-default-project');
+      if (raw === null || String(raw).trim() === '') return -1;
+      const n = parseInt(raw, 10);
+      if (Number.isNaN(n) || n < 0 || n >= PROJECTS.length) return -1;
+      return n;
+    })();
+
+    /* ── Overlay expand / collapse ──────────────────── */
+    const overlay   = document.getElementById('cs-overlay');
+    const csInner   = document.getElementById('cs-inner');
+    const csClose   = document.getElementById('cs-close');
+    let openIdx     = -1;
+    let savedRect   = null;
+    let dragLocked  = false;
+
+    let csLightboxSetup = false;
+    function setupCsLightboxOnce() {
+      if (csLightboxSetup) return;
+      csLightboxSetup = true;
+      const lb = document.createElement('div');
+      lb.id = 'cs-lightbox';
+      lb.innerHTML = '<button type="button" id="cs-lightbox-close">Close</button><img id="cs-lightbox-img" src="" alt="" decoding="async">';
+      document.body.appendChild(lb);
+      lb.addEventListener('click', e => {
+        if (e.target === lb || e.target.id === 'cs-lightbox-close') lb.classList.remove('open');
+      });
+      document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') lb.classList.remove('open');
+      });
+      document.addEventListener('click', e => {
+        const img = e.target.closest('#cs-overlay .cs-carousel-slide img');
+        if (!img) return;
+        document.getElementById('cs-lightbox-img').src = img.src;
+        document.getElementById('cs-lightbox-img').alt = img.alt || '';
+        lb.classList.add('open');
+      });
+    }
+
+    function initSingleCarousel(el) {
+      const slides = el.querySelectorAll('.cs-carousel-slide');
+      const track  = el.querySelector('.cs-carousel-slides');
+      const thumbs = el.querySelectorAll('.cs-carousel-thumb');
+      let cur = 0;
+      function goTo(n) {
+        cur = (n + slides.length) % slides.length;
+        if (track) track.style.transform = `translateX(-${cur * 100}%)`;
+        thumbs.forEach((t, i) => t.classList.toggle('active', i === cur));
+      }
+      const prev = el.querySelector('.cs-carousel-prev');
+      const next = el.querySelector('.cs-carousel-next');
+      if (prev) prev.addEventListener('click', () => goTo(cur - 1));
+      if (next) next.addEventListener('click', () => goTo(cur + 1));
+      thumbs.forEach((t, i) => t.addEventListener('click', () => goTo(i)));
+    }
+
+    function initAccordions() {
+      document.querySelectorAll('#cs-overlay .cs-process-group').forEach(group => {
+        const items = group.querySelectorAll('.cs-acc-item');
+        function initCarouselInItem(item) {
+          const car = item.querySelector('.cs-carousel');
+          if (car && car.dataset.init !== '1') {
+            initSingleCarousel(car);
+            car.dataset.init = '1';
+          }
+        }
+        items.forEach(item => {
+          const trigger = item.querySelector('.cs-acc-trigger');
+          if (!trigger) return;
+          trigger.addEventListener('click', () => {
+            const opening = !item.classList.contains('is-open');
+            if (opening) {
+              items.forEach(i => {
+                i.classList.remove('is-open');
+                i.querySelector('.cs-acc-trigger')?.setAttribute('aria-expanded', 'false');
+              });
+              item.classList.add('is-open');
+              trigger.setAttribute('aria-expanded', 'true');
+              initCarouselInItem(item);
+            } else {
+              item.classList.remove('is-open');
+              trigger.setAttribute('aria-expanded', 'false');
+            }
+          });
+        });
+        const firstOpen = group.querySelector('.cs-acc-item.is-open');
+        if (firstOpen) initCarouselInItem(firstOpen);
+      });
+    }
+
+    function initStandaloneCarousels() {
+      document.querySelectorAll('#cs-overlay .cs-carousel').forEach(el => {
+        if (el.closest('.cs-acc-item')) return;
+        if (el.dataset.init === '1') return;
+        initSingleCarousel(el);
+        el.dataset.init = '1';
+      });
+    }
+
+    function bindOverlayMedia() {
+      setupCsLightboxOnce();
+      initAccordions();
+      initStandaloneCarousels();
+    }
+
+    function renderProject(idx) {
+      const p = PROJECTS[idx];
+      const nextP = PROJECTS[p.next];
+      const hlCards = p.highlights.map(h => `
+        <div class="cs-hl-card">
+          <span class="cs-hl-stat">${h.stat}</span>
+          <span class="cs-hl-label">${h.label}</span>
+        </div>`).join('');
+      const escapeAttr = v => String(v ?? '').replace(/"/g, '&quot;');
+
+      const steps = (p.process || []).map((s, i) => `
+        <div class="cs-step">
+          <span class="cs-step-num">0${i+1}</span>
+          <div class="cs-step-body">
+            <span class="cs-step-name">${s.step}</span>
+            <span class="cs-step-desc">${s.desc}</span>
+          </div>
+        </div>`).join('');
+      const skillsPills = p.skills
+        ? `${p.skills.split(' · ').map(s => `<span class="cs-skills-pill">${s}</span>`).join('')}`
+        : '';
+      const hlBlock = p.highlights && p.highlights.length
+        ? `<div class="cs-highlights">${hlCards}</div>`
+        : '';
+
+      const carouselHtml = (cid, imgs, extraClass = '') =>
+        imgs.length
+          ? `<div class="cs-carousel${extraClass ? ` ${extraClass}` : ''}" id="${cid}">
+              <div class="cs-carousel-track">
+                <div class="cs-carousel-slides">${imgs.map((im, ii) => `<div class="cs-carousel-slide"><img src="${escapeAttr(im.src)}" alt="${escapeAttr(im.label)}" decoding="async"${ii > 0 ? ' loading="lazy"' : ''}></div>`).join('')}</div>
+                <button type="button" class="cs-carousel-btn cs-carousel-prev" aria-label="Previous slide">&#8592;</button>
+                <button type="button" class="cs-carousel-btn cs-carousel-next" aria-label="Next slide">&#8594;</button>
+              </div>
+              <div class="cs-carousel-thumbs">${imgs.map((im, ii) =>
+                `<img class="cs-carousel-thumb${ii === 0 ? ' active' : ''}" src="${escapeAttr(im.src)}" alt="${escapeAttr(im.label)}" decoding="async"${ii > 0 ? ' loading="lazy"' : ''}>`).join('')}</div>
+            </div>`
+          : '';
+
+      const narrativeBlock = (p.narrativeSlides && p.narrativeSlides.length)
+        ? `<div class="cs-narrative-block">
+            <span class="cs-narrative-label">Case narrative</span>
+            ${carouselHtml(`carousel-narrative-${idx}`, p.narrativeSlides, 'cs-narrative-carousel')}
+          </div>`
+        : '';
+
+      const designProcess = p.sections && p.sections.length ? `
+        <div class="cs-process-group">
+          <div class="cs-process-group-header">
+            <span class="cs-process-group-label">${p.processGroupLabel || 'Design Process'}</span>
+          </div>
+          <div class="cs-acc-list">
+          ${p.sections.map((sec, si) => {
+            const cid = `carousel-${String(idx)}-${si}`;
+            const aid = `acc-${String(idx)}-${si}`;
+            const imgs = sec.images || [];
+            const isOpen = si === 0;
+            return `<div class="cs-acc-item${isOpen ? ' is-open' : ''}" data-acc="${si}">
+              <button type="button" class="cs-acc-trigger" id="${aid}-trigger" aria-expanded="${isOpen ? 'true' : 'false'}" aria-controls="${aid}-panel">
+                <span class="cs-acc-trigger-text">${sec.title}</span>
+                <span class="cs-acc-chevron" aria-hidden="true"></span>
+              </button>
+              <div class="cs-acc-panel" id="${aid}-panel" role="region" aria-labelledby="${aid}-trigger">
+                <div class="cs-acc-panel-inner">
+                  <div class="cs-section">
+                    <div class="cs-section-body">
+                      <h3 class="cs-section-title">${sec.title}</h3>
+                      <div class="cs-section-content">${sec.html}</div>
+                      ${carouselHtml(cid, imgs)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>`;
+          }).join('')}
+          </div>
+        </div>` : `
+        <div class="cs-process">
+          <span class="cs-process-title">Design Process</span>
+          <div class="cs-process-steps">${steps}</div>
+        </div>`;
+
+      const learningsLabelText = escapeAttr(p.learningsLabel || 'Learnings');
+      const learningsBlock = p.evaluationHtml ? '' : (p.learningsHtml ? `
+        <div class="cs-learnings">
+          <span class="cs-learnings-label">${learningsLabelText}</span>
+          ${p.learningsHtml}
+        </div>` : (p.learnings && p.learnings.length ? `
+        <div class="cs-learnings">
+          <span class="cs-learnings-label">${learningsLabelText}</span>
+          <ul class="cs-learnings-list">${p.learnings.map(l => `<li>${l}</li>`).join('')}</ul>
+        </div>` : ''));
+
+      const evaluationBlock = p.evaluationHtml ? `
+        <div class="cs-evaluation">
+          <span class="cs-evaluation-label">${escapeAttr(p.evaluationLabel || 'Evaluation')}</span>
+          ${p.evaluationImg ? `<figure class="cs-evaluation-figure"><img src="${escapeAttr(p.evaluationImg)}" alt="${escapeAttr(p.evaluationImgAlt || '')}" decoding="async" loading="lazy"></figure>` : ''}
+          <div class="cs-evaluation-body">${p.evaluationHtml}</div>
+        </div>` : '';
+
+      const videosBlock = p.videos && p.videos.length ? (() => {
+        const vn = p.videos.length;
+        const colsCls = vn === 1 ? 'cs-videos-grid--cols-1' : vn === 2 ? 'cs-videos-grid--cols-2' : 'cs-videos-grid--cols-3';
+        return `
+        <div class="cs-videos"><span class="cs-videos-label">${escapeAttr(p.videosLabel || 'Product in motion')}</span>${p.videosNarrativeHtml ? `<div class="cs-videos-narrative">${p.videosNarrativeHtml}</div>` : ''}<div class="cs-videos-grid ${colsCls}">${p.videos.map(v => {
+          const cap = v.label && String(v.label).trim()
+            ? `<span class="cs-video-caption">${String(v.label).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</span>`
+            : '';
+          return `<div class="cs-video-wrap"><video src="${escapeAttr(v.src)}" controls muted playsinline preload="metadata"></video>${cap}</div>`;
+        }).join('')}</div></div>`;
+      })() : '';
+
+      const chipRow = `
+        <div class="cs-chips">
+          ${p.tag.split(' · ').map(t => `<span class="cs-tag-chip">${t}</span>`).join('')}
+          ${p.company ? `<span class="cs-tag-chip">${p.company}</span>` : ''}
+          ${p.chipBlogUrl ? `<a class="cs-chips-tertiary" href="${escapeAttr(p.chipBlogUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeAttr(p.chipBlogAriaLabel || (String(p.chipBlogLabel || 'Read article') + ' (opens in new tab)'))}">${String(p.chipBlogLabel || 'Read article').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</a>` : ''}
+          ${p.titleExternalUrl ? `<a class="cs-chips-external" href="${escapeAttr(p.titleExternalUrl)}" target="_blank" rel="noopener noreferrer" aria-label="${escapeAttr(p.titleExternalUrlAria || 'Open external link (opens in new tab)')}"><svg class="cs-chips-external-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>` : ''}
+        </div>`;
+
+      csInner.innerHTML = `
+        ${chipRow}
+        <h2 class="cs-title">${p.title}</h2>
+        ${p.subtitle ? `<p class="cs-subtitle">${p.subtitle}</p>` : ''}
+        <div class="cs-meta">
+          <div class="cs-meta-item"><span class="cs-meta-label">Role</span><span class="cs-meta-value">${p.role}</span></div>
+          <div class="cs-meta-item"><span class="cs-meta-label">Timeline</span><span class="cs-meta-value">${p.timeline}</span></div>
+          <div class="cs-meta-item"><span class="cs-meta-label">Team</span><span class="cs-meta-value">${p.team}</span></div>
+        </div>
+        <div class="cs-image">${p.img ? `<img src="${p.img}" alt="${p.title.replace(/<[^>]+>/g,'')}" decoding="async" loading="lazy">` : `<span class="cs-image-label">Project image</span>`}</div>
+        ${p.intro ? `<div class="cs-intro-block"><div class="cs-intro">${p.intro}</div>${p.introDiagram ? `<div class="cs-intro-diagram"><img src="${escapeAttr(p.introDiagram)}" alt="Opportunity workflow in the Transformation Hub — diagram" decoding="async" loading="lazy"></div>` : ''}</div>` : ''}
+        <div class="cs-context">
+          <div class="cs-context-row"><span class="cs-col-label">${escapeAttr(p.problemLabel || 'Challenge')}</span><div class="cs-col-text">${p.problem}</div></div>
+          <div class="cs-context-row"><span class="cs-col-label">${escapeAttr(p.approachLabel || 'Approach')}</span><div class="cs-col-text">${String(p.approach).replace(/\n/g,'<br>')}</div></div>
+          <div class="cs-context-row"><span class="cs-col-label">${escapeAttr(p.resultLabel || 'Outcome')}</span><div class="cs-col-text">${String(p.result).replace(/\n/g,'<br>')}</div></div>
+        </div>
+        ${hlBlock}
+        ${narrativeBlock}
+        ${designProcess}
+        ${p.skills ? `<div class="cs-skills"><span class="cs-skills-label">Skills demonstrated</span><div class="cs-skills-pills">${skillsPills}</div></div>` : ''}
+        ${videosBlock}
+        ${evaluationBlock}${learningsBlock}
+        <div class="cs-divider"></div>
+        <div class="cs-nav">
+          <span class="cs-nav-num">${p.num}</span>
+          <button class="cs-nav-btn" id="cs-next-btn">Next: ${nextP.title.replace(/<[^>]+>/g,'')} →</button>
+        </div>`;
+      document.getElementById('cs-next-btn').addEventListener('click', () => {
+        overlay.scrollTop = 0;
+        renderProject(p.next);
+        openIdx = p.next;
+        bindOverlayMedia();
+      });
+    }
+
+    function expandCard(item) {
+      if (dragLocked) return;
+      const rect = item.getBoundingClientRect();
+      savedRect  = rect;
+      openIdx    = parseInt(item.dataset.idx);
+      dragLocked = true;
+
+      renderProject(openIdx);
+
+      overlay.style.cssText = `
+        display:block; position:fixed;
+        top:${rect.top}px; left:${rect.left}px;
+        width:${rect.width}px; height:${rect.height}px;
+        border-radius:4px; overflow:hidden; transition:none; opacity:1;`;
+      overlay.offsetHeight;
+
+      const T = '.72s cubic-bezier(.22,1,.36,1)';
+      overlay.style.transition = `top ${T},left ${T},width ${T},height ${T},border-radius ${T}`;
+      overlay.style.top    = '0'; overlay.style.left   = '0';
+      overlay.style.width  = '100vw'; overlay.style.height = '100dvh';
+      overlay.style.borderRadius = '0';
+
+      setTimeout(() => {
+        overlay.style.overflow = '';
+        overlay.classList.add('ready');
+        csClose.classList.add('visible');
+        bindOverlayMedia();
+      }, 720);
+    }
+
+    function collapseCard() {
+      if (openIdx < 0) return;
+      overlay.scrollTop = 0;
+      overlay.classList.remove('ready');
+      csClose.classList.remove('visible');
+
+      const rect = savedRect;
+      const T = '.6s cubic-bezier(.22,1,.36,1)';
+      overlay.style.transition = `top ${T},left ${T},width ${T},height ${T},border-radius ${T},opacity .35s .28s`;
+      overlay.style.top    = rect.top  + 'px'; overlay.style.left   = rect.left  + 'px';
+      overlay.style.width  = rect.width + 'px'; overlay.style.height = rect.height + 'px';
+      overlay.style.borderRadius = '4px'; overlay.style.opacity = '0';
+
+      setTimeout(() => {
+        overlay.style.cssText = 'display:none;';
+        openIdx = -1; dragLocked = false;
+      }, 660);
+    }
+
+    csClose.addEventListener('click', collapseCard);
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') collapseCard(); });
+
+    /* ── Horizontal drag strip ──────────────────────── */
+    const viewport = document.getElementById('h-viewport');
+    const track    = document.getElementById('h-track');
+    const fillEl   = document.getElementById('h-fill');
+    const hint     = document.getElementById('drag-hint');
+
+    let pos = 0, vel = 0;
+    let dragging = false, startX = 0, startPos = 0, mdX = 0, mdY = 0, didMove = false;
+
+    function getMinX() { return -(track.scrollWidth - window.innerWidth); }
+    function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+    function updateProgress() {
+      const t = clamp(-pos / Math.abs(getMinX()), 0, 1);
+      fillEl.style.width = (t * 100) + '%';
+    }
+
+    (function loop() {
+      requestAnimationFrame(loop);
+      if (dragLocked) return;
+      if (!dragging) {
+        vel *= 0.88;
+        pos = clamp(pos + vel, getMinX(), 0);
+        if (Math.abs(vel) < 0.05) { vel = 0; }
+        else if (Math.abs(vel) > 0.5) { applyDragBlur(vel); }
+        else { releaseDragBlur(); }
+      }
+      const skew = clamp(vel * 0.18, -12, 12);
+      track.style.transform = `translateX(${pos}px) skewX(${skew}deg)`;
+      updateProgress();
+    })();
+
+    viewport.addEventListener('mousedown', e => {
+      if (e.target.closest('#top-bar,#cs-close,.mob-btn,.mob-nav,.site-footer') || dragLocked) return;
+      dragging = true; startX = e.clientX; startPos = pos; vel = 0;
+      mdX = e.clientX; mdY = e.clientY; didMove = false;
+      cRing.classList.add('drag'); hint.classList.add('hidden');
+    });
+    window.addEventListener('mousemove', e => {
+      if (!dragging) return;
+      if (Math.hypot(e.clientX - mdX, e.clientY - mdY) > 6) didMove = true;
+      const next = clamp(startPos + (e.clientX - startX), getMinX(), 0);
+      vel = next - pos; pos = next;
+      applyDragBlur(vel);
+    });
+    window.addEventListener('mouseup', e => {
+      if (!dragging) return;
+      dragging = false; cRing.classList.remove('drag');
+      releaseDragBlur();
+      if (!didMove) {
+        const item = e.target.closest('.h-item');
+        if (item) expandCard(item);
+      }
+    });
+
+    viewport.addEventListener('touchstart', e => {
+      startX = e.touches[0].clientX; startPos = pos; vel = 0; dragging = true;
+      mdX = e.touches[0].clientX; mdY = e.touches[0].clientY; didMove = false;
+      hint.classList.add('hidden');
+    }, { passive: true });
+    window.addEventListener('touchmove', e => {
+      if (!dragging) return;
+      if (Math.hypot(e.touches[0].clientX - mdX, e.touches[0].clientY - mdY) > 6) didMove = true;
+      const next = clamp(startPos + (e.touches[0].clientX - startX), getMinX(), 0);
+      vel = next - pos; pos = next;
+      applyDragBlur(vel);
+    }, { passive: true });
+    window.addEventListener('touchend', e => {
+      if (!dragging) return;
+      dragging = false;
+      releaseDragBlur();
+      if (!didMove) {
+        const item = e.target.closest('.h-item');
+        if (item) expandCard(item);
+      }
+    });
+
+    viewport.addEventListener('wheel', e => {
+      if (dragLocked) return;
+      e.preventDefault();
+      vel = clamp(vel + e.deltaY * 0.6 + e.deltaX * 0.6, -60, 60);
+      hint.classList.add('hidden');
+      applyDragBlur(vel);
+      clearTimeout(wheelReleaseTimer);
+      wheelReleaseTimer = setTimeout(releaseDragBlur, 180);
+    }, { passive: false });
+
+    let wheelReleaseTimer = null;
+
+    function applyDragBlur(v) {
+      const speed = Math.abs(v);
+      const blur  = Math.min(speed * 0.28, 10);
+      const dim   = Math.max(1 - speed * 0.008, 0.72);
+      track.classList.remove('drag-released');
+      track.classList.add('is-dragging');
+      track.style.setProperty('--drag-blur', blur.toFixed(2) + 'px');
+      track.style.setProperty('--drag-dim',  dim.toFixed(3));
+    }
+
+    function releaseDragBlur() {
+      track.classList.remove('is-dragging');
+      track.classList.add('drag-released');
+      track.style.setProperty('--drag-blur', '0px');
+      track.style.setProperty('--drag-dim',  '1');
+      setTimeout(() => track.classList.remove('drag-released'), 520);
+    }
+
+    /* ── Mobile nav ──────────────────────────────────── */
+    document.getElementById('mob-open').addEventListener('click', () => document.getElementById('mob-nav').classList.add('open'));
+    document.getElementById('mob-close').addEventListener('click', () => document.getElementById('mob-nav').classList.remove('open'));
+    document.querySelectorAll('.mob-nav-links a').forEach(a => a.addEventListener('click', () => document.getElementById('mob-nav').classList.remove('open')));
+
+    if (DEFAULT_OPEN_IDX >= 0) {
+      window.addEventListener('load', () => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const target = document.querySelector(`.h-item[data-idx="${DEFAULT_OPEN_IDX}"]`);
+            if (target) expandCard(target);
+          });
+        });
+      });
+    }
+  </script>
+</body>
+</html>
