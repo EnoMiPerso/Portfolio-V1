@@ -1,5 +1,5 @@
-# Portfolio site — exact layout for GitHub (after a full wipe)
-# Rule: ALL images/videos live under assets/ ONLY. Never put fms/, platform/, etc. next to assets/.
+# Portfolio site — layout for GitHub (media at repo root, no assets/ wrapper)
+# HTML uses paths like: fms/..., platform/..., studio/... (same folder names at repository root)
 
 <repository root>/
   .nojekyll
@@ -15,22 +15,18 @@
   work-project-transformation-hub.html
 
   (optional) README.md  GITHUB-PAGES.md  MANIFEST-PAGES-DEPLOY.txt  REPO-FILE-LAYOUT.txt
-  (optional) scripts/   — dev helper only; site does not require it to run
+  (optional) scripts/
 
-  assets/
-    ai-annotations/          31 files  — ai-annotations*, mp4 demos
-    fms/                     56 files  — fms-*, file-mgmt-*, file-management-system-hero.png
-    platform/                27 files  — admin-*, hi-fi-*, ia-*, def-ideation-*, research-*, content-management.png
-    rpg/                     13 files  — rpg-*, group-displacement.png
-    smart-inputs/            41 files  — smart-inputs-* (+ .mov)
-    studio/                  23 files  — studio-framework*
-    transformation-hub/      45 files  — th-*, transformation-hub-hero.png, transformation-hub.png, transformation-hub-product-demo.mp4
+  fms/                     56 files
+  transformation-hub/      45 files
+  smart-inputs/            41 files
+  ai-annotations/          31 files
+  studio/                  23 files
+  platform/                27 files
+  rpg/                     13 files
 
-# Manual upload order (each batch < 100 files for GitHub web UI):
-#   1) Create folder assets/ on GitHub, then upload each subfolder IN ONE COMMIT PER SUBFOLDER
-#      (open assets → Add file → Upload → select all files IN e.g. fms only).
-#   2) Upload the 10 .html files + .nojekyll at repository root (one small batch).
+# Manual GitHub upload: each folder above is under 100 files. Upload one folder per commit.
+# No need to create an "assets" parent — drag the folder (e.g. fms) to the repo root.
 
-# Verify in browser (replace USER/REPO):
-#   https://USER.github.io/REPO/assets/studio/studio-framework-hero.png
-# If 404, the file is not under assets/studio/ on GitHub.
+# Smoke test in browser:
+#   https://USER.github.io/REPO/studio/studio-framework-hero.png
